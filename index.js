@@ -56,10 +56,10 @@ app.post("/esim/qrcode", async (req, res) => {
   try {
     const response = await axios.post(
       `${BASE_URL}/allesim/v1/esimSubscribe`,
-      payload,
+      JSON.stringify(payload), // ✅ 轉為純 JSON 字串
       {
         headers,
-        transformRequest: [(data) => JSON.stringify(data)], // ✅ 確保是 raw JSON string
+        transformRequest: [], // ✅ 禁用 axios 預設格式處理
       }
     );
     console.log("✅ API Response:", response.data);
@@ -78,7 +78,6 @@ app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
 
-// 錯誤攔截
 process.on("uncaughtException", (err) => {
   console.error("🔥 未捕捉例外:", err);
 });
