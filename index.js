@@ -29,7 +29,6 @@ function hmacWithHexKey(data, hexKey) {
 app.post("/esim/qrcode", async (req, res) => {
   const { channel_dataplan_id, number } = req.body;
 
-  // ✅ 驗證輸入參數
   if (!channel_dataplan_id || !number) {
     return res.status(400).json({
       error: "缺少必要參數",
@@ -52,12 +51,10 @@ app.post("/esim/qrcode", async (req, res) => {
   };
 
   const payload = { channel_dataplan_id, number };
-  const rawBody = JSON.stringify(payload); // ✅ 傳送 raw JSON 字串
-
-  console.log("🛰 Sending:", rawBody);
+  console.log("🛰 Sending:", payload);
 
   try {
-    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, rawBody, { headers });
+    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, payload, { headers });
     console.log("✅ API Response:", response.data);
     res.json(response.data);
   } catch (err) {
@@ -74,11 +71,10 @@ app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
 
-// 捕捉未處理例外
+// 錯誤攔截
 process.on("uncaughtException", (err) => {
   console.error("🔥 未捕捉例外:", err);
 });
-
 process.on("unhandledRejection", (reason, promise) => {
   console.error("🔥 未捕捉拒絕:", reason);
 });
