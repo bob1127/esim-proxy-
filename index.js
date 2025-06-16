@@ -2,6 +2,7 @@ import express from "express";
 import axios from "axios";
 import bodyParser from "body-parser";
 import crypto from "crypto";
+import FormData from "form-data";
 
 const app = express();
 app.use(bodyParser.json());
@@ -43,25 +44,29 @@ app.post("/esim/qrcode", async (req, res) => {
   const signature = hmacWithHexKey(dataToSign, hexKey);
 
   const headers = {
-    "Content-Type": "application/json",
     "MICROESIM-ACCOUNT": ACCOUNT,
     "MICROESIM-NONCE": nonce,
     "MICROESIM-TIMESTAMP": timestamp,
     "MICROESIM-SIGN": signature,
   };
 
-  const payload = { channel_dataplan_id, number };
-  console.log("🛰 Sending:", payload);
+  // 🔥 改成 multipart/form-data
+  const form = new FormData();
+  form.append("channel_dataplan_id", channel_dataplan_id);
+  form.append("number", number);
+
+  console.log("🛰 Sending FormData:", {
+    channel_dataplan_id,
+    number,
+  });
 
   try {
-    const response = await axios.post(
-      `${BASE_URL}/allesim/v1/esimSubscribe`,
-      JSON.stringify(payload), // ✅ 轉為純 JSON 字串
-      {
-        headers,
-        transformRequest: [], // ✅ 禁用 axios 預設格式處理
-      }
-    );
+    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, form, {
+      headers: {
+        ...headers,
+        ...form.getHeaders(), // 必須加上這行讓 axios 正確送出 multipart boundary
+      },
+    });
     console.log("✅ API Response:", response.data);
     res.json(response.data);
   } catch (err) {
