@@ -42,9 +42,12 @@ app.post("/esim/qrcode", async (req, res) => {
   };
 
   const payload = {
-     channel_dataplan_id: "20230813A45282eeE1CCee85998876195",
-  number: "testuser_001" 
+    channel_dataplan_id: "20230813A45282eeE1CCee85998876195",
+    number: "testuser_001"
   };
+
+  // ✅ 印出 payload 到 Railway logs
+  console.log("🛰 Sending payload:", payload);
 
   try {
     const response = await axios.post(
@@ -54,6 +57,7 @@ app.post("/esim/qrcode", async (req, res) => {
     );
     res.json(response.data);
   } catch (err) {
+    console.error("❌ eSIM API 錯誤詳細：", err.response?.data || err.message);
     res.status(500).json({
       error: "eSIM API 呼叫失敗",
       details: err.response?.data || err.message,
@@ -62,5 +66,5 @@ app.post("/esim/qrcode", async (req, res) => {
 });
 
 app.listen(process.env.PORT || 3000, () => {
-  console.log("Proxy server running");
+  console.log("✅ Proxy server running");
 });
