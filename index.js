@@ -54,7 +54,14 @@ app.post("/esim/qrcode", async (req, res) => {
   console.log("🛰 Sending:", payload);
 
   try {
-    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, payload, { headers });
+    const response = await axios.post(
+      `${BASE_URL}/allesim/v1/esimSubscribe`,
+      payload,
+      {
+        headers,
+        transformRequest: [(data) => JSON.stringify(data)], // ✅ 確保是 raw JSON string
+      }
+    );
     console.log("✅ API Response:", response.data);
     res.json(response.data);
   } catch (err) {
