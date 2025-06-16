@@ -42,7 +42,8 @@ app.post("/esim/qrcode", async (req, res) => {
   };
 
   const payload = {
-    channel_dataplan_id: "20230813A45282eeE1CCee85998876195",
+     channel_dataplan_id: "20230813A45282eeE1CCee85998876195",
+  number: "testuser_001" 
   };
 
   try {
