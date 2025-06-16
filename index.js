@@ -13,21 +13,23 @@ const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
 const ITERATIONS = 1024;
 const KEY_LENGTH = 32;
 
-// 派生 PBKDF2 金鑰
 function pbkdf2ToHex(secret, saltHex, iterations, keyLen) {
   const salt = Buffer.from(saltHex, "hex");
-  return crypto.pbkdf2Sync(secret, salt, iterations, keyLen, "sha256").toString("hex");
+  const derivedKey = crypto.pbkdf2Sync(secret, salt, iterations, keyLen, "sha256");
+  return derivedKey.toString("hex");
 }
 
-// HMAC-SHA256 簽章
 function hmacWithHexKey(data, hexKey) {
-  return crypto.createHmac("sha256", Buffer.from(hexKey, "utf-8"))
-               .update(data)
-               .digest("hex");
+  return crypto
+    .createHmac("sha256", Buffer.from(hexKey, "utf-8"))
+    .update(data)
+    .digest("hex");
 }
 
 app.post("/esim/qrcode", async (req, res) => {
   const { channel_dataplan_id, number } = req.body;
+
+  // ✅ 驗證輸入參數
   if (!channel_dataplan_id || !number) {
     return res.status(400).json({
       error: "缺少必要參數",
@@ -37,8 +39,9 @@ app.post("/esim/qrcode", async (req, res) => {
 
   const nonce = Math.random().toString(36).substring(2, 18);
   const timestamp = Date.now().toString();
+  const dataToSign = ACCOUNT + nonce + timestamp;
   const hexKey = pbkdf2ToHex(SECRET, SALT_HEX, ITERATIONS, KEY_LENGTH);
-  const signature = hmacWithHexKey(ACCOUNT + nonce + timestamp, hexKey);
+  const signature = hmacWithHexKey(dataToSign, hexKey);
 
   const headers = {
     "Content-Type": "application/json",
@@ -49,15 +52,12 @@ app.post("/esim/qrcode", async (req, res) => {
   };
 
   const payload = { channel_dataplan_id, number };
-  console.log("🛰 Sending:", payload);
+  const rawBody = JSON.stringify(payload); // ✅ 傳送 raw JSON 字串
+
+  console.log("🛰 Sending:", rawBody);
 
   try {
-    const response = await axios({
-      method: "post",
-      url: `${BASE_URL}/allesim/v1/esimSubscribe`,
-      data: JSON.stringify(payload),
-      headers,
-    });
+    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, rawBody, { headers });
     console.log("✅ API Response:", response.data);
     res.json(response.data);
   } catch (err) {
@@ -69,9 +69,16 @@ app.post("/esim/qrcode", async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT, () => {
-  console.log(`✅ Server running on port ${process.env.PORT}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
 });
 
-process.on("uncaughtException", (err) => console.error("🔥 Uncaught:", err));
-process.on("unhandledRejection", (reason) => console.error("🔥 Unhandled Rejection:", reason));
+// 捕捉未處理例外
+process.on("uncaughtException", (err) => {
+  console.error("🔥 未捕捉例外:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 未捕捉拒絕:", reason);
+});
