@@ -13,22 +13,21 @@ const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
 const ITERATIONS = 1024;
 const KEY_LENGTH = 32;
 
+// 派生 PBKDF2 金鑰
 function pbkdf2ToHex(secret, saltHex, iterations, keyLen) {
   const salt = Buffer.from(saltHex, "hex");
-  const derivedKey = crypto.pbkdf2Sync(secret, salt, iterations, keyLen, "sha256");
-  return derivedKey.toString("hex");
+  return crypto.pbkdf2Sync(secret, salt, iterations, keyLen, "sha256").toString("hex");
 }
 
+// HMAC-SHA256 簽章
 function hmacWithHexKey(data, hexKey) {
-  return crypto
-    .createHmac("sha256", Buffer.from(hexKey, "utf-8"))
-    .update(data)
-    .digest("hex");
+  return crypto.createHmac("sha256", Buffer.from(hexKey, "utf-8"))
+               .update(data)
+               .digest("hex");
 }
 
 app.post("/esim/qrcode", async (req, res) => {
   const { channel_dataplan_id, number } = req.body;
-
   if (!channel_dataplan_id || !number) {
     return res.status(400).json({
       error: "缺少必要參數",
@@ -38,9 +37,8 @@ app.post("/esim/qrcode", async (req, res) => {
 
   const nonce = Math.random().toString(36).substring(2, 18);
   const timestamp = Date.now().toString();
-  const dataToSign = ACCOUNT + nonce + timestamp;
   const hexKey = pbkdf2ToHex(SECRET, SALT_HEX, ITERATIONS, KEY_LENGTH);
-  const signature = hmacWithHexKey(dataToSign, hexKey);
+  const signature = hmacWithHexKey(ACCOUNT + nonce + timestamp, hexKey);
 
   const headers = {
     "Content-Type": "application/json",
@@ -51,18 +49,19 @@ app.post("/esim/qrcode", async (req, res) => {
   };
 
   const payload = { channel_dataplan_id, number };
-  console.log("🛰 發送資料至 eSIM API:", payload);
+  console.log("🛰 Sending:", payload);
 
   try {
-    const response = await axios.post(
-      `${BASE_URL}/allesim/v1/esimSubscribe`,
-      payload, // ✅ 正確寫法：直接傳 object
-      { headers }
-    );
-    console.log("✅ eSIM 回應：", response.data);
+    const response = await axios({
+      method: "post",
+      url: `${BASE_URL}/allesim/v1/esimSubscribe`,
+      data: JSON.stringify(payload),
+      headers,
+    });
+    console.log("✅ API Response:", response.data);
     res.json(response.data);
   } catch (err) {
-    console.error("❌ eSIM API 錯誤：", err.response?.data || err.message);
+    console.error("❌ API Error:", err.response?.data || err.message);
     res.status(500).json({
       error: "eSIM API 呼叫失敗",
       details: err.response?.data || err.message,
@@ -70,16 +69,9 @@ app.post("/esim/qrcode", async (req, res) => {
   }
 });
 
-
-// ✅ Railway 專用：只使用指定 PORT
 app.listen(process.env.PORT, () => {
-  console.log(`✅ Proxy server running on port ${process.env.PORT}`);
+  console.log(`✅ Server running on port ${process.env.PORT}`);
 });
 
-// ✅ 捕捉未處理例外防止崩潰
-process.on("uncaughtException", (err) => {
-  console.error("🔥 未捕捉例外:", err);
-});
-process.on("unhandledRejection", (reason) => {
-  console.error("🔥 未捕捉拒絕:", reason);
-});
+process.on("uncaughtException", (err) => console.error("🔥 Uncaught:", err));
+process.on("unhandledRejection", (reason) => console.error("🔥 Unhandled Rejection:", reason));
