@@ -29,7 +29,6 @@ function hmacWithHexKey(data, hexKey) {
 app.post("/esim/qrcode", async (req, res) => {
   const { channel_dataplan_id, number } = req.body;
 
-  // 🧾 檢查參數是否齊全
   if (!channel_dataplan_id || !number) {
     return res.status(400).json({
       error: "缺少必要參數",
@@ -51,17 +50,13 @@ app.post("/esim/qrcode", async (req, res) => {
     "MICROESIM-SIGN": signature,
   };
 
-  const payload = {
-    channel_dataplan_id,
-    number,
-  };
-
+  const payload = { channel_dataplan_id, number };
   console.log("🛰 發送資料至 eSIM API:", payload);
 
   try {
     const response = await axios.post(
       `${BASE_URL}/allesim/v1/esimSubscribe`,
-      JSON.stringify(payload), // 🧷 確保為 JSON 字串
+      payload, // ✅ 正確寫法：直接傳 object
       { headers }
     );
     console.log("✅ eSIM 回應：", response.data);
@@ -74,6 +69,7 @@ app.post("/esim/qrcode", async (req, res) => {
     });
   }
 });
+
 
 // ✅ Railway 專用：只使用指定 PORT
 app.listen(process.env.PORT, () => {
