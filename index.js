@@ -46,18 +46,14 @@ app.post("/esim/qrcode", async (req, res) => {
     number: "testuser_001"
   };
 
-  // ✅ 印出 payload 到 Railway logs
-  console.log("🛰 Sending payload:", payload);
+  console.log("🛰 發送資料至 eSIM API:", payload);
 
   try {
-    const response = await axios.post(
-      `${BASE_URL}/allesim/v1/esimSubscribe`,
-      payload,
-      { headers }
-    );
+    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, payload, { headers });
+    console.log("✅ eSIM 回應：", response.data);
     res.json(response.data);
   } catch (err) {
-    console.error("❌ eSIM API 錯誤詳細：", err.response?.data || err.message);
+    console.error("❌ eSIM API 錯誤：", err.response?.data || err.message);
     res.status(500).json({
       error: "eSIM API 呼叫失敗",
       details: err.response?.data || err.message,
@@ -65,6 +61,16 @@ app.post("/esim/qrcode", async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("✅ Proxy server running");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Proxy server running on port ${PORT}`);
+});
+
+// ✅ 捕捉未處理例外防止 Railway SIGTERM
+process.on("uncaughtException", (err) => {
+  console.error("🔥 未捕捉例外:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 未捕捉拒絕:", reason);
 });
