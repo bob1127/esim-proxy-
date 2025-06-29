@@ -7,7 +7,7 @@ const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
 const API_URL = "https://microesim.club/allesim/v1/esimDataplanList";
 
 const timestamp = Date.now().toString(); // 13 位 timestamp
-const nonce = crypto.randomBytes(12).toString("hex"); // 6~32 字符
+const nonce = crypto.randomBytes(6).toString("hex"); // 12 字符，合法長度 (6~20)
 
 const hexKey = crypto.pbkdf2Sync(
   SECRET,
