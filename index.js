@@ -43,6 +43,13 @@ app.post("/esim/qrcode", async (req, res) => {
   form.append("number", number);
   form.append("channel_dataplan_id", channel_dataplan_id);
 
+  // ✅ 補上 activation_date（UTC+0 格式，未來時間）
+  const activationDate = new Date(Date.now() + 5 * 60 * 1000)
+    .toISOString()
+    .replace("T", " ")
+    .substring(0, 19);
+  form.append("activation_date", activationDate);
+
   const headers = {
     ...form.getHeaders(),
     "MICROESIM-ACCOUNT": ACCOUNT,
@@ -76,6 +83,7 @@ app.post("/esim/qrcode", async (req, res) => {
     return res.status(500).json({ error: "Internal Error", detail: err.message });
   }
 });
+
 
 // ✅ 查詢可用方案（application/json）
 app.get("/esim/list", async (req, res) => {
