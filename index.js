@@ -9,64 +9,63 @@ app.use(express.json());
 const ACCOUNT = "test_account_9999";
 const SECRET = "7119968f9ff07654ga485487822g";
 const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
-const API_URL = "https://microesim.club/allesim/v1/esimSubscribe";
 
+const SIGN_HEADERS = () => {
+  const timestamp = Date.now().toString();
+  const nonce = crypto.randomBytes(6).toString("hex");
+  const hexKey = crypto.pbkdf2Sync(
+    SECRET,
+    Buffer.from(SALT_HEX, "hex"),
+    1024,
+    32,
+    "sha256"
+  ).toString("hex");
+  const dataToSign = ACCOUNT + nonce + timestamp;
+  const signature = crypto
+    .createHmac("sha256", Buffer.from(hexKey, "utf8"))
+    .update(dataToSign)
+    .digest("hex");
+  return { timestamp, nonce, signature };
+};
+
+// ✅ 建立訂單（form-data）
 app.post("/esim/qrcode", async (req, res) => {
   console.log("🪵 Incoming body:", req.body);
+  const { channel_dataplan_id, number } = req.body;
+
+  if (!channel_dataplan_id || !number) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const { timestamp, nonce, signature } = SIGN_HEADERS();
+
+  const form = new FormData();
+  form.append("number", number);
+  form.append("channel_dataplan_id", channel_dataplan_id);
+
+  const headers = {
+    ...form.getHeaders(),
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
 
   try {
-    const { channel_dataplan_id, number } = req.body;
-
-    if (!channel_dataplan_id || !number) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    const timestamp = Date.now().toString();
-    const nonce = crypto.randomBytes(6).toString("hex");
-
-    const hexKey = crypto.pbkdf2Sync(
-      SECRET,
-      Buffer.from(SALT_HEX, "hex"),
-      1024,
-      32,
-      "sha256"
-    ).toString("hex");
-
-    const dataToSign = ACCOUNT + nonce + timestamp;
-    const signature = crypto
-      .createHmac("sha256", Buffer.from(hexKey, "utf8"))
-      .update(dataToSign)
-      .digest("hex");
-
-    // ✅ 正確使用 form-data 格式送出參數
-    const form = new FormData();
-    form.append("number", number);
-    form.append("channel_dataplan_id", channel_dataplan_id);
-
-    const headers = {
-      ...form.getHeaders(),
-      "MICROESIM-ACCOUNT": ACCOUNT,
-      "MICROESIM-NONCE": nonce,
-      "MICROESIM-TIMESTAMP": timestamp,
-      "MICROESIM-SIGN": signature,
-    };
-
-    const response = await axios.post(API_URL, form, { headers });
+    const response = await axios.post(
+      "https://microesim.club/allesim/v1/esimSubscribe",
+      form,
+      { headers }
+    );
 
     const result = response.data;
-
     if (result.code === 200) {
       return res.status(200).json({ qrcode: result.data.qrcode });
     } else {
-      return res.status(400).json({
-        error: result.msg || "Subscribe failed",
-        raw: result,
-      });
+      return res.status(400).json({ error: result.msg, raw: result });
     }
   } catch (err) {
-    console.error("❌ Internal Error:", err.message);
-
-    // ✅ 印出 microesim 回傳的錯誤（非常重要）
+    console.error("❌ Error:", err.message);
     if (err.response) {
       console.error("❌ MicroeSIM Response:", err.response.data);
       return res.status(err.response.status).json({
@@ -74,11 +73,31 @@ app.post("/esim/qrcode", async (req, res) => {
         detail: err.response.data,
       });
     }
+    return res.status(500).json({ error: "Internal Error", detail: err.message });
+  }
+});
 
-    return res.status(500).json({
-      error: "Internal Server Error",
-      detail: err.message,
-    });
+// ✅ 查詢可用方案（application/json）
+app.get("/esim/list", async (req, res) => {
+  const { timestamp, nonce, signature } = SIGN_HEADERS();
+
+  const headers = {
+    "Content-Type": "application/json",
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
+
+  try {
+    const response = await axios.get(
+      "https://microesim.club/allesim/v1/esimDataplanList",
+      { headers }
+    );
+    res.status(200).json(response.data);
+  } catch (err) {
+    console.error("❌ List Error:", err.message);
+    res.status(500).json({ error: "List Fetch Failed", detail: err.message });
   }
 });
 
