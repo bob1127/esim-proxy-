@@ -38,14 +38,15 @@ app.post("/esim/qrcode", async (req, res) => {
       .update(dataToSign)
       .digest("hex");
 
-    // ✅ 改為 form-data 格式
+    // ✅ 使用 form-data 格式
     const form = new FormData();
     form.append("number", number);
     form.append("channel_dataplan_id", channel_dataplan_id);
-    // 若你要加入 activation_date、remark 也可以 form.append("activation_date", "...");
+    // 如需延後開通，可加上：
+    // form.append("activation_date", "2025-07-01 00:00:00");
 
     const headers = {
-      ...form.getHeaders(), // ⬅️ 包含正確的 Content-Type: multipart/form-data
+      ...form.getHeaders(),
       "MICROESIM-ACCOUNT": ACCOUNT,
       "MICROESIM-NONCE": nonce,
       "MICROESIM-TIMESTAMP": timestamp,
@@ -65,7 +66,16 @@ app.post("/esim/qrcode", async (req, res) => {
       });
     }
   } catch (err) {
-    console.error("❌ Internal Error:", err.message);
+    console.error("❌ Internal Error:", err);
+
+    if (err.response) {
+      console.error("❌ MicroeSIM Response:", err.response.data);
+      return res.status(err.response.status).json({
+        error: "MicroeSIM Error",
+        detail: err.response.data,
+      });
+    }
+
     return res.status(500).json({
       error: "Internal Server Error",
       detail: err.message,
