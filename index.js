@@ -1,48 +1,68 @@
-import fetch from 'node-fetch';
-import crypto from 'crypto';
+import express from "express";
+import fetch from "node-fetch";
+import crypto from "crypto";
+
+const app = express();
+app.use(express.json());
 
 const ACCOUNT = "test_account_9999";
 const SECRET = "7119968f9ff07654ga485487822g";
 const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
-const API_URL = "https://microesim.club/allesim/v1/esimDataplanList";
+const API_URL = "https://microesim.club/allesim/v1/esimSubscribe";
 
-const timestamp = Date.now().toString(); // 13 位 timestamp
-const nonce = crypto.randomBytes(6).toString("hex"); // 12 字符，合法長度 (6~20)
+app.post("/esim/qrcode", async (req, res) => {
+  try {
+    const { channel_dataplan_id, number } = req.body;
 
-const hexKey = crypto.pbkdf2Sync(
-  SECRET,
-  Buffer.from(SALT_HEX, "hex"),
-  1024,
-  32,
-  "sha256"
-).toString("hex");
+    if (!channel_dataplan_id || !number) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
-const dataToSign = ACCOUNT + nonce + timestamp;
+    const timestamp = Date.now().toString();
+    const nonce = crypto.randomBytes(6).toString("hex");
 
-const signature = crypto
-  .createHmac("sha256", Buffer.from(hexKey, "utf8"))
-  .update(dataToSign)
-  .digest("hex");
+    const hexKey = crypto.pbkdf2Sync(
+      SECRET,
+      Buffer.from(SALT_HEX, "hex"),
+      1024,
+      32,
+      "sha256"
+    ).toString("hex");
 
-const headers = {
-  "Content-Type": "application/json",
-  "MICROESIM-ACCOUNT": ACCOUNT,
-  "MICROESIM-NONCE": nonce,
-  "MICROESIM-TIMESTAMP": timestamp,
-  "MICROESIM-SIGN": signature,
-};
+    const dataToSign = ACCOUNT + nonce + timestamp;
+    const signature = crypto
+      .createHmac("sha256", Buffer.from(hexKey, "utf8"))
+      .update(dataToSign)
+      .digest("hex");
 
-console.log("🔐 DEBUG HEADER INFO:", headers);
+    const headers = {
+      "Content-Type": "application/json",
+      "MICROESIM-ACCOUNT": ACCOUNT,
+      "MICROESIM-NONCE": nonce,
+      "MICROESIM-TIMESTAMP": timestamp,
+      "MICROESIM-SIGN": signature,
+    };
 
-fetch(API_URL, {
-  method: "GET",
-  headers,
-})
-  .then(async (res) => {
-    const data = await res.text();
-    console.log("✅ Status:", res.status);
-    console.log("✅ Response:", data);
-  })
-  .catch((err) => {
-    console.error("❌ Error:", err.message);
-  });
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ channel_dataplan_id, number }),
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.code === 200) {
+      return res.status(200).json({ qrcode: result.data.qrcode });
+    } else {
+      return res.status(400).json({ error: result.msg || "Subscribe failed", raw: result });
+    }
+  } catch (err) {
+    console.error("❌ Internal Error:", err);
+    return res.status(500).json({ error: "Internal Server Error", detail: err.message });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
+});
