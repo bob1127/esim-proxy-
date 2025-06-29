@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 import crypto from "crypto";
 
 const app = express();
-app.use(express.json()); // ✅ 確保可以解析 JSON body
+app.use(express.json()); // ✅ 解析 JSON body
 
 const ACCOUNT = "test_account_9999";
 const SECRET = "7119968f9ff07654ga485487822g";
@@ -37,8 +37,11 @@ app.post("/esim/qrcode", async (req, res) => {
       .update(dataToSign)
       .digest("hex");
 
+    const bodyPayload = JSON.stringify({ channel_dataplan_id, number });
+
     const headers = {
       "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(bodyPayload).toString(), // ✅ 手動加上
       "MICROESIM-ACCOUNT": ACCOUNT,
       "MICROESIM-NONCE": nonce,
       "MICROESIM-TIMESTAMP": timestamp,
@@ -48,7 +51,7 @@ app.post("/esim/qrcode", async (req, res) => {
     const response = await fetch(API_URL, {
       method: "POST",
       headers,
-      body: JSON.stringify({ channel_dataplan_id, number }),
+      body: bodyPayload,
     });
 
     const result = await response.json();
