@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 import crypto from "crypto";
 
 const app = express();
-app.use(express.json());
+app.use(express.json()); // ✅ 確保可以解析 JSON body
 
 const ACCOUNT = "test_account_9999";
 const SECRET = "7119968f9ff07654ga485487822g";
@@ -11,6 +11,8 @@ const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
 const API_URL = "https://microesim.club/allesim/v1/esimSubscribe";
 
 app.post("/esim/qrcode", async (req, res) => {
+  console.log("🪵 Incoming body:", req.body); // ✅ Debug Log
+
   try {
     const { channel_dataplan_id, number } = req.body;
 
@@ -54,11 +56,17 @@ app.post("/esim/qrcode", async (req, res) => {
     if (response.ok && result.code === 200) {
       return res.status(200).json({ qrcode: result.data.qrcode });
     } else {
-      return res.status(400).json({ error: result.msg || "Subscribe failed", raw: result });
+      return res.status(400).json({
+        error: result.msg || "Subscribe failed",
+        raw: result,
+      });
     }
   } catch (err) {
     console.error("❌ Internal Error:", err);
-    return res.status(500).json({ error: "Internal Server Error", detail: err.message });
+    return res.status(500).json({
+      error: "Internal Server Error",
+      detail: err.message,
+    });
   }
 });
 
