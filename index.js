@@ -28,7 +28,7 @@ const SIGN_HEADERS = () => {
   return { timestamp, nonce, signature };
 };
 
-// ✅ 建立訂單（form-data）
+// ✅ 建立訂單，並自動查詢 QRCode
 app.post("/esim/qrcode", async (req, res) => {
   console.log("🪵 Incoming body:", req.body);
   const { channel_dataplan_id, number } = req.body;
@@ -43,6 +43,13 @@ app.post("/esim/qrcode", async (req, res) => {
   form.append("number", number);
   form.append("channel_dataplan_id", channel_dataplan_id);
 
+  // 建議加上 activation_date，避免立即啟用
+  const activationDate = new Date(Date.now() + 5 * 60 * 1000)
+    .toISOString()
+    .replace("T", " ")
+    .substring(0, 19);
+  form.append("activation_date", activationDate);
+
   const headers = {
     ...form.getHeaders(),
     "MICROESIM-ACCOUNT": ACCOUNT,
@@ -52,15 +59,44 @@ app.post("/esim/qrcode", async (req, res) => {
   };
 
   try {
-    const response = await axios.post(
+    const subscribeRes = await axios.post(
       "https://microesim.club/allesim/v1/esimSubscribe",
       form,
       { headers }
     );
 
-    const result = response.data;
-    if (result.code === 200) {
-      return res.status(200).json({ qrcode: result.data.qrcode });
+    const result = subscribeRes.data;
+    if (result.code === 1 && result.result?.topup_id) {
+      // 成功後立即用 topup_id 查詢 QRCode
+      const { topup_id } = result.result;
+
+      const detailHeaders = {
+        "Content-Type": "application/json",
+        "MICROESIM-ACCOUNT": ACCOUNT,
+        "MICROESIM-NONCE": nonce,
+        "MICROESIM-TIMESTAMP": timestamp,
+        "MICROESIM-SIGN": signature,
+      };
+
+      const detailRes = await axios.post(
+        "https://microesim.club/allesim/v1/topupDetail",
+        { topup_id },
+        { headers: detailHeaders }
+      );
+
+      const detailData = detailRes.data;
+      if (detailData.code === 1 && detailData.result?.qrcode?.length) {
+        return res.status(200).json({
+          topup_id,
+          qrcode: detailData.result.qrcode,
+        });
+      } else {
+        return res.status(200).json({
+          topup_id,
+          warning: "訂單成功但未取得 QRCode",
+          detail: detailData,
+        });
+      }
     } else {
       return res.status(400).json({ error: result.msg, raw: result });
     }
@@ -77,7 +113,7 @@ app.post("/esim/qrcode", async (req, res) => {
   }
 });
 
-// ✅ 查詢可用方案（application/json）
+// ✅ 查詢可用方案
 app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
@@ -98,6 +134,47 @@ app.get("/esim/list", async (req, res) => {
   } catch (err) {
     console.error("❌ List Error:", err.message);
     res.status(500).json({ error: "List Fetch Failed", detail: err.message });
+  }
+});
+
+// ✅ 查詢 QRCode（手動查詢用）
+app.post("/esim/topup-detail", async (req, res) => {
+  const { topup_id } = req.body;
+  if (!topup_id) {
+    return res.status(400).json({ error: "Missing topup_id" });
+  }
+
+  const { timestamp, nonce, signature } = SIGN_HEADERS();
+
+  const headers = {
+    "Content-Type": "application/json",
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
+
+  try {
+    const response = await axios.post(
+      "https://microesim.club/allesim/v1/topupDetail",
+      { topup_id },
+      { headers }
+    );
+    const result = response.data;
+    if (result.code === 1) {
+      return res.status(200).json({ qrcode: result.result.qrcode });
+    } else {
+      return res.status(400).json({ error: result.msg, raw: result });
+    }
+  } catch (err) {
+    console.error("❌ TopupDetail Error:", err.message);
+    if (err.response) {
+      return res.status(err.response.status).json({
+        error: "MicroeSIM Error",
+        detail: err.response.data,
+      });
+    }
+    return res.status(500).json({ error: "Internal Error", detail: err.message });
   }
 });
 
