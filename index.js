@@ -19,13 +19,13 @@ function pbkdf2ToHex(secret, saltHex, iterations, keyLen) {
   const derivedKey = crypto.pbkdf2Sync(secret, salt, iterations, keyLen, "sha256");
   return derivedKey.toString("hex");
 }
+
 function hmacWithHexKey(data, hexKey) {
   return crypto
-    .createHmac("sha256", Buffer.from(hexKey, "hex")) // ✅ hex 而非 utf-8
+    .createHmac("sha256", Buffer.from(hexKey, "hex"))
     .update(data)
     .digest("hex");
 }
-
 
 app.post("/esim/qrcode", async (req, res) => {
   const { channel_dataplan_id, number } = req.body;
@@ -50,8 +50,17 @@ app.post("/esim/qrcode", async (req, res) => {
     "MICROESIM-SIGN": signature,
   };
 
+  console.log("🔐 DEBUG 簽章資訊", {
+    ACCOUNT,
+    nonce,
+    timestamp,
+    dataToSign,
+    hexKey,
+    signature,
+    headers,
+  });
+
   try {
-    // 🛰 Step 1: 訂購 eSIM
     const form = new FormData();
     form.append("channel_dataplan_id", channel_dataplan_id);
     form.append("number", number);
@@ -66,7 +75,6 @@ app.post("/esim/qrcode", async (req, res) => {
     const topup_id = subscribeRes.data?.result?.topup_id;
     if (!topup_id) throw new Error("未取得 topup_id");
 
-    // 🛰 Step 2: 查詢 QRCode
     const detailForm = new FormData();
     detailForm.append("topup_id", topup_id);
 
@@ -78,10 +86,7 @@ app.post("/esim/qrcode", async (req, res) => {
     });
 
     const result = detailRes.data?.data || detailRes.data?.result;
-
-    if (!result?.qrcode) {
-      throw new Error("未收到 QRCode");
-    }
+    if (!result?.qrcode) throw new Error("未收到 QRCode");
 
     return res.json({
       success: true,
