@@ -1,7 +1,6 @@
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
-import FormData from "form-data";
 
 const app = express();
 app.use(express.json());
@@ -38,22 +37,19 @@ app.post("/esim/qrcode", async (req, res) => {
       .update(dataToSign)
       .digest("hex");
 
-    // ✅ 使用 form-data 格式
-    const form = new FormData();
-    form.append("number", number);
-    form.append("channel_dataplan_id", channel_dataplan_id);
-    // 如需延後開通，可加上：
-    // form.append("activation_date", "2025-07-01 00:00:00");
-
     const headers = {
-      ...form.getHeaders(),
+      "Content-Type": "application/json",
       "MICROESIM-ACCOUNT": ACCOUNT,
       "MICROESIM-NONCE": nonce,
       "MICROESIM-TIMESTAMP": timestamp,
       "MICROESIM-SIGN": signature,
     };
 
-    const response = await axios.post(API_URL, form, { headers });
+    const response = await axios.post(
+      API_URL,
+      { channel_dataplan_id, number },
+      { headers }
+    );
 
     const result = response.data;
 
@@ -66,16 +62,7 @@ app.post("/esim/qrcode", async (req, res) => {
       });
     }
   } catch (err) {
-    console.error("❌ Internal Error:", err);
-
-    if (err.response) {
-      console.error("❌ MicroeSIM Response:", err.response.data);
-      return res.status(err.response.status).json({
-        error: "MicroeSIM Error",
-        detail: err.response.data,
-      });
-    }
-
+    console.error("❌ Internal Error:", err.message);
     return res.status(500).json({
       error: "Internal Server Error",
       detail: err.message,
