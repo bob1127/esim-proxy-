@@ -19,13 +19,13 @@ function pbkdf2ToHex(secret, saltHex, iterations, keyLen) {
   const derivedKey = crypto.pbkdf2Sync(secret, salt, iterations, keyLen, "sha256");
   return derivedKey.toString("hex");
 }
-
 function hmacWithHexKey(data, hexKey) {
   return crypto
-    .createHmac("sha256", Buffer.from(hexKey, "utf-8"))
+    .createHmac("sha256", Buffer.from(hexKey, "hex")) // ✅ hex 而非 utf-8
     .update(data)
     .digest("hex");
 }
+
 
 app.post("/esim/qrcode", async (req, res) => {
   const { channel_dataplan_id, number } = req.body;
