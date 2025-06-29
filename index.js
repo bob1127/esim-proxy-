@@ -38,10 +38,10 @@ app.post("/esim/qrcode", async (req, res) => {
   }
 
   const nonce = Math.random().toString(36).substring(2, 18);
-  const timestamp = Date.now().toString();
-  const dataToSign = ACCOUNT + nonce + timestamp;
+  const timestamp = `${Math.floor(Date.now() / 1000)}`;
+  const signData = ACCOUNT + nonce + timestamp;
   const hexKey = pbkdf2ToHex(SECRET, SALT_HEX, ITERATIONS, KEY_LENGTH);
-  const signature = hmacWithHexKey(dataToSign, hexKey);
+  const signature = hmacWithHexKey(signData, hexKey);
 
   const headers = {
     "MICROESIM-ACCOUNT": ACCOUNT,
@@ -50,27 +50,48 @@ app.post("/esim/qrcode", async (req, res) => {
     "MICROESIM-SIGN": signature,
   };
 
-  // 🔥 改成 multipart/form-data
   const form = new FormData();
   form.append("channel_dataplan_id", channel_dataplan_id);
   form.append("number", number);
 
-  console.log("🛰 Sending FormData:", {
-    channel_dataplan_id,
-    number,
-  });
-
   try {
-    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, form, {
+    // 1️⃣ 訂購 eSIM
+    const subscribeResponse = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, form, {
       headers: {
         ...headers,
-        ...form.getHeaders(), // 必須加上這行讓 axios 正確送出 multipart boundary
+        ...form.getHeaders(),
       },
     });
-    console.log("✅ API Response:", response.data);
-    res.json(response.data);
+
+    const topup_id = subscribeResponse.data?.result?.topup_id;
+    if (!topup_id) throw new Error("無法取得 topup_id");
+
+    // 2️⃣ 查詢 QRCode
+    const detailForm = new FormData();
+    detailForm.append("topup_id", topup_id);
+
+    const detailResponse = await axios.post(`${BASE_URL}/allesim/v1/topupDetail`, detailForm, {
+      headers: {
+        ...detailForm.getHeaders(),
+        ...headers,
+      },
+    });
+
+    const result = detailResponse.data?.data || detailResponse.data?.result;
+
+    if (!result?.qrcode) {
+      throw new Error("未收到 qrcode");
+    }
+
+    res.json({
+      success: true,
+      qrcode: result.qrcode,
+      topup_id,
+      lpa_str: result.lpa_str,
+      ios_install_link: result.ios_esim_install_link,
+    });
   } catch (err) {
-    console.error("❌ API Error:", err.response?.data || err.message);
+    console.error("❌ eSIM API Error:", err.response?.data || err.message);
     res.status(500).json({
       error: "eSIM API 呼叫失敗",
       details: err.response?.data || err.message,
@@ -80,7 +101,7 @@ app.post("/esim/qrcode", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ eSIM Proxy running on port ${PORT}`);
 });
 
 process.on("uncaughtException", (err) => {
