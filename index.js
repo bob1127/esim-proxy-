@@ -28,9 +28,11 @@ const SIGN_HEADERS = () => {
   return { timestamp, nonce, signature };
 };
 
-// 建立訂單 + 查詢 QRCode
+// ✅ 建立訂單並查詢 QRCode
 app.post("/esim/qrcode", async (req, res) => {
+  console.log("🪵 Incoming body:", req.body);
   const { channel_dataplan_id, number } = req.body;
+
   if (!channel_dataplan_id || !number) {
     return res.status(400).json({ error: "Missing required fields" });
   }
@@ -45,25 +47,30 @@ app.post("/esim/qrcode", async (req, res) => {
     new Date(Date.now() + 5 * 60 * 1000).toISOString().replace("T", " ").substring(0, 19)
   );
 
+  const headers = {
+    ...form.getHeaders(),
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
+
   try {
-    const subscribeRes = await axios.post(
+    const response = await axios.post(
       "https://microesim.club/allesim/v1/esimSubscribe",
       form,
-      {
-        headers: {
-          ...form.getHeaders(),
-          "MICROESIM-ACCOUNT": ACCOUNT,
-          "MICROESIM-NONCE": nonce,
-          "MICROESIM-TIMESTAMP": timestamp,
-          "MICROESIM-SIGN": signature,
-        },
-      }
+      { headers, timeout: 10000 }
     );
 
-    const result = subscribeRes.data;
+    const result = response.data;
+    console.log("📥 Subscribe result:", result);
+
     if (result.code === 1 && result.result?.topup_id) {
       const topup_id = result.result.topup_id;
+
+      // 再產一組新的簽章
       const { timestamp, nonce, signature } = SIGN_HEADERS();
+
       const detailRes = await axios.post(
         "https://microesim.club/allesim/v1/topupDetail",
         { topup_id },
@@ -75,76 +82,62 @@ app.post("/esim/qrcode", async (req, res) => {
             "MICROESIM-TIMESTAMP": timestamp,
             "MICROESIM-SIGN": signature,
           },
+          timeout: 10000,
         }
       );
 
       const detail = detailRes.data;
+      console.log("📥 Detail result:", detail);
+
       if (detail.code === 1 && detail.result?.qrcode) {
-        return res.status(200).json({ topup_id, qrcode: detail.result.qrcode });
+        return res.status(200).json({
+          topup_id,
+          qrcode: detail.result.qrcode,
+        });
       } else {
-        return res.status(200).json({ topup_id, warning: "無 QRCode", detail });
+        return res.status(200).json({
+          topup_id,
+          warning: "訂單成功但無 QRCode",
+          detail,
+        });
       }
     } else {
       return res.status(400).json({ error: result.msg, raw: result });
     }
   } catch (err) {
-    return res.status(err.response?.status || 500).json({
-      error: err.response?.data?.msg || "Internal error",
-      detail: err.response?.data || err.message,
-    });
+    console.error("❌ Error:", err.message);
+    if (err.response) {
+      console.error("❌ MicroeSIM Response:", err.response.data);
+      return res.status(err.response.status).json({
+        error: "MicroeSIM Error",
+        detail: err.response.data,
+      });
+    }
+    return res.status(500).json({ error: "Internal Error", detail: err.message });
   }
 });
 
-// 查詢可用方案
-app.get("/esim/list", async (_, res) => {
+// ✅ 查詢可用方案
+app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
-  try {
-    const listRes = await axios.get("https://microesim.club/allesim/v1/esimDataplanList", {
-      headers: {
-        "Content-Type": "application/json",
-        "MICROESIM-ACCOUNT": ACCOUNT,
-        "MICROESIM-NONCE": nonce,
-        "MICROESIM-TIMESTAMP": timestamp,
-        "MICROESIM-SIGN": signature,
-      },
-    });
-    res.status(200).json(listRes.data);
-  } catch (err) {
-    res.status(500).json({ error: "List Fetch Failed", detail: err.message });
-  }
-});
 
-// 查詢 QRCode by topup_id
-app.post("/esim/topup-detail", async (req, res) => {
-  const { topup_id } = req.body;
-  if (!topup_id) return res.status(400).json({ error: "Missing topup_id" });
+  const headers = {
+    "Content-Type": "application/json",
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
 
-  const { timestamp, nonce, signature } = SIGN_HEADERS();
   try {
-    const detailRes = await axios.post(
-      "https://microesim.club/allesim/v1/topupDetail",
-      { topup_id },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "MICROESIM-ACCOUNT": ACCOUNT,
-          "MICROESIM-NONCE": nonce,
-          "MICROESIM-TIMESTAMP": timestamp,
-          "MICROESIM-SIGN": signature,
-        },
-      }
+    const response = await axios.get(
+      "https://microesim.club/allesim/v1/esimDataplanList",
+      { headers, timeout: 10000 }
     );
-    const result = detailRes.data;
-    if (result.code === 1) {
-      return res.status(200).json({ qrcode: result.result.qrcode });
-    } else {
-      return res.status(400).json({ error: result.msg, raw: result });
-    }
+    res.status(200).json(response.data);
   } catch (err) {
-    return res.status(err.response?.status || 500).json({
-      error: err.response?.data?.msg || "Internal error",
-      detail: err.response?.data || err.message,
-    });
+    console.error("❌ List Error:", err.message);
+    res.status(500).json({ error: "List Fetch Failed", detail: err.message });
   }
 });
 
