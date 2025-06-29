@@ -43,6 +43,16 @@ app.post("/esim/qrcode", async (req, res) => {
   const hexKey = pbkdf2ToHex(SECRET, SALT_HEX, ITERATIONS, KEY_LENGTH);
   const signature = hmacWithHexKey(signData, hexKey);
 
+  // 🔍 DEBUG: 印出簽章過程
+  console.log("🔐 簽章 debug", {
+    ACCOUNT,
+    nonce,
+    timestamp,
+    signData,
+    hexKey,
+    signature,
+  });
+
   const headers = {
     "MICROESIM-ACCOUNT": ACCOUNT,
     "MICROESIM-NONCE": nonce,
