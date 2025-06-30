@@ -10,6 +10,14 @@ const ACCOUNT = "test_account_9999";
 const SECRET = "7119968f9ff07654ga485487822g";
 const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
 
+const PLAN_ID_MAP = {
+  "KR-3DAY": "2691d925-2faa-4fd4-863c-601d37252549",
+  "KR-5DAY": "3f30e801-37b8-4ae4-a7d6-bb99ffbd1af7",
+  "KR-10DAY": "005740c7-5388-40f6-b2a3-8c2e36e4aecd",
+  "KR-20DAY": "9755f575-6a95-4337-9352-a2d664bf1bbd",
+  "KR-30DAY": "adca09ab-55ae-49c6-9f97-a09ee868c067",
+};
+
 const SIGN_HEADERS = () => {
   const timestamp = Date.now().toString();
   const nonce = crypto.randomBytes(6).toString("hex");
@@ -32,9 +40,14 @@ const SIGN_HEADERS = () => {
 app.post("/esim/qrcode", async (req, res) => {
   console.log("🪵 Incoming body:", req.body);
 
-  // ✅ 支援兩種欄位命名方式
-  const channel_dataplan_id = req.body.channel_dataplan_id || req.body.planId;
+  // 支援 channel_dataplan_id 或 planId 轉換
+  let channel_dataplan_id = req.body.channel_dataplan_id;
+  const planId = req.body.planId;
   const number = req.body.number || req.body.quantity;
+
+  if (!channel_dataplan_id && planId) {
+    channel_dataplan_id = PLAN_ID_MAP[planId];
+  }
 
   if (!channel_dataplan_id || !number) {
     return res.status(400).json({ error: "Missing required fields" });
