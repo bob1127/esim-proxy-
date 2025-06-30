@@ -71,12 +71,15 @@ app.post("/esim/qrcode", async (req, res) => {
       // 再產一組新的簽章
       const { timestamp, nonce, signature } = SIGN_HEADERS();
 
+      const form2 = new FormData();
+      form2.append("topup_id", topup_id);
+
       const detailRes = await axios.post(
         "https://microesim.club/allesim/v1/topupDetail",
-        JSON.stringify({ topup_id }), // ✅ 明確轉為 JSON 字串
+        form2,
         {
           headers: {
-            "Content-Type": "application/json",
+            ...form2.getHeaders(),
             "MICROESIM-ACCOUNT": ACCOUNT,
             "MICROESIM-NONCE": nonce,
             "MICROESIM-TIMESTAMP": timestamp,
