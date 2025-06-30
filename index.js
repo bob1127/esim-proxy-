@@ -73,7 +73,7 @@ app.post("/esim/qrcode", async (req, res) => {
 
       const detailRes = await axios.post(
         "https://microesim.club/allesim/v1/topupDetail",
-        { topup_id },
+        JSON.stringify({ topup_id }), // ✅ 明確轉為 JSON 字串
         {
           headers: {
             "Content-Type": "application/json",
