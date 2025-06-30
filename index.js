@@ -40,14 +40,10 @@ const SIGN_HEADERS = () => {
 app.post("/esim/qrcode", async (req, res) => {
   console.log("🪵 Incoming body:", req.body);
 
-  // 支援 channel_dataplan_id 或 planId 轉換
-  let channel_dataplan_id = req.body.channel_dataplan_id;
-  const planId = req.body.planId;
+  const rawPlanId = req.body.channel_dataplan_id || req.body.planId;
   const number = req.body.number || req.body.quantity;
 
-  if (!channel_dataplan_id && planId) {
-    channel_dataplan_id = PLAN_ID_MAP[planId];
-  }
+  const channel_dataplan_id = PLAN_ID_MAP[rawPlanId] || rawPlanId;
 
   if (!channel_dataplan_id || !number) {
     return res.status(400).json({ error: "Missing required fields" });
