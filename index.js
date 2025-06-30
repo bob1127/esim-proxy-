@@ -31,7 +31,10 @@ const SIGN_HEADERS = () => {
 // ✅ 建立訂單並查詢 QRCode
 app.post("/esim/qrcode", async (req, res) => {
   console.log("🪵 Incoming body:", req.body);
-  const { channel_dataplan_id, number } = req.body;
+
+  // ✅ 支援兩種欄位命名方式
+  const channel_dataplan_id = req.body.channel_dataplan_id || req.body.planId;
+  const number = req.body.number || req.body.quantity;
 
   if (!channel_dataplan_id || !number) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -68,7 +71,6 @@ app.post("/esim/qrcode", async (req, res) => {
     if (result.code === 1 && result.result?.topup_id) {
       const topup_id = result.result.topup_id;
 
-      // 再產一組新的簽章
       const { timestamp, nonce, signature } = SIGN_HEADERS();
 
       const form2 = new FormData();
