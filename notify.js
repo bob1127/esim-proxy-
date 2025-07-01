@@ -27,20 +27,28 @@ function aesDecrypt(encryptedText, key, iv) {
   return decrypted;
 }
 
-// 處理藍新金流 Notify
+// Notify 處理
 router.post("/notify", async (req, res) => {
   try {
     const { TradeInfo } = req.body;
     if (!TradeInfo) return res.status(400).send("Missing TradeInfo");
 
     const decrypted = aesDecrypt(TradeInfo, HASH_KEY, HASH_IV);
+    console.log("🔥 Raw decrypted:", decrypted); // 新增：顯示解密結果
+
     const parsed = new URLSearchParams(decrypted);
     const data = {};
     parsed.forEach((value, key) => {
       data[key] = value;
     });
 
-    const orderNo = data.MerchantOrderNo;
+    // 嘗試從多種欄位名取得值
+    const orderNo = data.MerchantOrderNo || data.MerchantOrderID || null;
+    const planId = data.CustomField1 || data.PlanId || null;
+    const quantity = Number(data.CustomField2 || data.Quantity || 1);
+
+    console.log("✅ 解密成功：", { orderNo, planId, quantity });
+
     if (!orderNo) return res.status(400).send("Missing MerchantOrderNo");
 
     // 查 WooCommerce 訂單
@@ -61,15 +69,15 @@ router.post("/notify", async (req, res) => {
       return found ? found.value : null;
     };
 
-    const planId = getMeta("esim_plan_id");
-    const quantity = getMeta("esim_number") || 1;
+    const finalPlanId = planId || getMeta("esim_plan_id");
+    const finalQuantity = quantity || getMeta("esim_number") || 1;
 
-    if (!planId) return res.status(400).send("Missing esim_plan_id");
+    if (!finalPlanId) return res.status(400).send("Missing esim_plan_id");
 
     // 呼叫 eSIM proxy 建立訂單
     const esimRes = await axios.post(ESIM_PROXY_URL, {
-      planId,
-      quantity,
+      planId: finalPlanId,
+      quantity: finalQuantity,
     });
 
     const { qrcode } = esimRes.data;
