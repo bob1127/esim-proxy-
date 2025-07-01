@@ -155,6 +155,59 @@ app.get("/esim/list", async (req, res) => {
   }
 });
 
+// ✅ 解密藍新 AES 加密內容
+function aesDecrypt(encryptedText: string) {
+  const HASH_KEY = "OVB4Xd2HgieiLJJcj5RMx9W94sMKgHQx";
+  const HASH_IV = "PKetlaZYZcZvlMmC";
+
+  const decipher = crypto.createDecipheriv(
+    "aes-256-cbc",
+    Buffer.from(HASH_KEY, "utf8"),
+    Buffer.from(HASH_IV, "utf8")
+  );
+  decipher.setAutoPadding(true);
+  let decrypted = decipher.update(encryptedText, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
+// ✅ 處理藍新付款通知並自動下訂 eSIM
+app.post("/notify", async (req, res) => {
+  console.log("📩 /notify Received:", req.body);
+
+  const { Status, TradeInfo } = req.body;
+  if (Status !== "SUCCESS" || !TradeInfo) {
+    return res.status(400).send("Invalid payload");
+  }
+
+  try {
+    const decrypted = aesDecrypt(TradeInfo);
+    const parsed = new URLSearchParams(decrypted);
+    const orderNo = parsed.get("MerchantOrderNo");
+    const planId = parsed.get("CustomField1"); // 結帳時送進來的方案 ID
+    const quantity = Number(parsed.get("CustomField2") || 1);
+
+    console.log("✅ 解密成功：", { orderNo, planId, quantity });
+
+    // 呼叫 /esim/qrcode 建立訂單
+    const esimResponse = await axios.post(
+      "https://esim-proxy-production.up.railway.app/esim/qrcode",
+      {
+        planId,
+        quantity,
+      }
+    );
+
+    const data = esimResponse.data;
+    console.log("📨 eSIM Response:", data);
+
+    return res.status(200).send("OK");
+  } catch (error) {
+    console.error("❌ Notify Error:", error);
+    return res.status(500).send("Failed to process notify");
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);
