@@ -18,7 +18,7 @@ const PLAN_ID_MAP = {
   "KR-30DAY": "adca09ab-55ae-49c6-9f97-a09ee868c067",
 };
 
-function SIGN_HEADERS() {
+const SIGN_HEADERS = () => {
   const timestamp = Date.now().toString();
   const nonce = crypto.randomBytes(6).toString("hex");
   const hexKey = crypto.pbkdf2Sync(
@@ -34,7 +34,7 @@ function SIGN_HEADERS() {
     .update(dataToSign)
     .digest("hex");
   return { timestamp, nonce, signature };
-}
+};
 
 // ✅ 建立訂單並查詢 QRCode
 app.post("/esim/qrcode", async (req, res) => {
@@ -56,10 +56,7 @@ app.post("/esim/qrcode", async (req, res) => {
   form.append("channel_dataplan_id", channel_dataplan_id);
   form.append(
     "activation_date",
-    new Date(Date.now() + 5 * 60 * 1000)
-      .toISOString()
-      .replace("T", " ")
-      .substring(0, 19)
+    new Date(Date.now() + 5 * 60 * 1000).toISOString().replace("T", " ").substring(0, 19)
   );
 
   const headers = {
@@ -155,58 +152,6 @@ app.get("/esim/list", async (req, res) => {
   } catch (err) {
     console.error("❌ List Error:", err.message);
     res.status(500).json({ error: "List Fetch Failed", detail: err.message });
-  }
-});
-
-// ✅ 解密藍新 AES 加密內容
-function aesDecrypt(encryptedText) {
-  const HASH_KEY = "OVB4Xd2HgieiLJJcj5RMx9W94sMKgHQx";
-  const HASH_IV = "PKetlaZYZcZvlMmC";
-
-  const decipher = crypto.createDecipheriv(
-    "aes-256-cbc",
-    Buffer.from(HASH_KEY, "utf8"),
-    Buffer.from(HASH_IV, "utf8")
-  );
-  decipher.setAutoPadding(true);
-  let decrypted = decipher.update(encryptedText, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
-}
-
-// ✅ 處理藍新付款通知並自動下訂 eSIM
-app.post("/notify", async (req, res) => {
-  console.log("📩 /notify Received:", req.body);
-
-  const { Status, TradeInfo } = req.body;
-  if (Status !== "SUCCESS" || !TradeInfo) {
-    return res.status(400).send("Invalid payload");
-  }
-
-  try {
-    const decrypted = aesDecrypt(TradeInfo);
-    const parsed = new URLSearchParams(decrypted);
-    const orderNo = parsed.get("MerchantOrderNo");
-    const planId = parsed.get("CustomField1");
-    const quantity = Number(parsed.get("CustomField2") || 1);
-
-    console.log("✅ 解密成功：", { orderNo, planId, quantity });
-
-    const esimResponse = await axios.post(
-      "https://esim-proxy-production.up.railway.app/esim/qrcode",
-      {
-        planId,
-        quantity,
-      }
-    );
-
-    const data = esimResponse.data;
-    console.log("📨 eSIM Response:", data);
-
-    return res.status(200).send("OK");
-  } catch (error) {
-    console.error("❌ Notify Error:", error);
-    return res.status(500).send("Failed to process notify");
   }
 });
 
