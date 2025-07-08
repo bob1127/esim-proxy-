@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config(); // ✅ 在任何使用 process.env 之前執行
+
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
@@ -6,9 +9,11 @@ import FormData from "form-data";
 const app = express();
 app.use(express.json());
 
-const ACCOUNT = "test_account_9999";
-const SECRET = "7119968f9ff07654ga485487822g";
-const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
+// ✅ 使用 .env 管理帳號與設定
+const ACCOUNT = process.env.ESIM_ACCOUNT;
+const SECRET = process.env.ESIM_SECRET;
+const SALT_HEX = process.env.ESIM_SALT;
+const BASE_URL = process.env.ESIM_BASE_URL;
 
 const PLAN_ID_MAP = {
   "KR-3DAY": "2691d925-2faa-4fd4-863c-601d37252549",
@@ -36,10 +41,9 @@ const SIGN_HEADERS = () => {
   return { timestamp, nonce, signature };
 };
 
-// ✅ 建立訂單並查詢 QRCode
+// ✅ 測試模式：模擬建立訂單並回傳假 QRCode
 app.post("/esim/qrcode", async (req, res) => {
-  console.log("🪵 Incoming body:", req.body);
-
+  console.log("🧪 測試模式：模擬建立訂單");
   const rawPlanId = req.body.channel_dataplan_id || req.body.planId;
   const number = req.body.number || req.body.quantity;
 
@@ -49,89 +53,15 @@ app.post("/esim/qrcode", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const { timestamp, nonce, signature } = SIGN_HEADERS();
-
-  const form = new FormData();
-  form.append("number", number);
-  form.append("channel_dataplan_id", channel_dataplan_id);
-  form.append(
-    "activation_date",
-    new Date(Date.now() + 5 * 60 * 1000).toISOString().replace("T", " ").substring(0, 19)
-  );
-
-  const headers = {
-    ...form.getHeaders(),
-    "MICROESIM-ACCOUNT": ACCOUNT,
-    "MICROESIM-NONCE": nonce,
-    "MICROESIM-TIMESTAMP": timestamp,
-    "MICROESIM-SIGN": signature,
-  };
-
-  try {
-    const response = await axios.post(
-      "https://microesim.club/allesim/v1/esimSubscribe",
-      form,
-      { headers, timeout: 10000 }
-    );
-
-    const result = response.data;
-    console.log("📥 Subscribe result:", result);
-
-    if (result.code === 1 && result.result?.topup_id) {
-      const topup_id = result.result.topup_id;
-
-      const { timestamp, nonce, signature } = SIGN_HEADERS();
-
-      const form2 = new FormData();
-      form2.append("topup_id", topup_id);
-
-      const detailRes = await axios.post(
-        "https://microesim.club/allesim/v1/topupDetail",
-        form2,
-        {
-          headers: {
-            ...form2.getHeaders(),
-            "MICROESIM-ACCOUNT": ACCOUNT,
-            "MICROESIM-NONCE": nonce,
-            "MICROESIM-TIMESTAMP": timestamp,
-            "MICROESIM-SIGN": signature,
-          },
-          timeout: 10000,
-        }
-      );
-
-      const detail = detailRes.data;
-      console.log("📥 Detail result:", detail);
-
-      if (detail.code === 1 && detail.result?.qrcode) {
-        return res.status(200).json({
-          topup_id,
-          qrcode: detail.result.qrcode,
-        });
-      } else {
-        return res.status(200).json({
-          topup_id,
-          warning: "訂單成功但無 QRCode",
-          detail,
-        });
-      }
-    } else {
-      return res.status(400).json({ error: result.msg, raw: result });
-    }
-  } catch (err) {
-    console.error("❌ Error:", err.message);
-    if (err.response) {
-      console.error("❌ MicroeSIM Response:", err.response.data);
-      return res.status(err.response.status).json({
-        error: "MicroeSIM Error",
-        detail: err.response.data,
-      });
-    }
-    return res.status(500).json({ error: "Internal Error", detail: err.message });
-  }
+  // ✅ 模擬回傳假訂單
+  return res.status(200).json({
+    topup_id: `TEST-${Date.now()}`,
+    qrcode: "https://via.placeholder.com/300x300.png?text=Fake+eSIM+QRCode",
+    note: "此為模擬測試，未連線正式 API，也未建立訂單",
+  });
 });
 
-// ✅ 查詢可用方案
+// ✅ 查詢可用方案（仍用正式 API）
 app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
@@ -145,7 +75,7 @@ app.get("/esim/list", async (req, res) => {
 
   try {
     const response = await axios.get(
-      "https://microesim.club/allesim/v1/esimDataplanList",
+      `${BASE_URL}/allesim/v1/esimDataplanList`,
       { headers, timeout: 10000 }
     );
     res.status(200).json(response.data);
