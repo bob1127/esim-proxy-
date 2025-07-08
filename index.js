@@ -90,6 +90,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);
 });
 // ✅ 額外測試：列出所有方案（格式化輸出）
+// ✅ 額外測試：列出所有方案（格式化輸出）
 app.get("/esim/test-list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
@@ -107,9 +108,20 @@ app.get("/esim/test-list", async (req, res) => {
       { headers, timeout: 10000 }
     );
 
-    console.log("📦 API 回傳內容", JSON.stringify(response.data, null, 2));
+    const plans = response.data?.result || [];
 
-    res.status(200).json({ success: true });
+    const simplified = plans.map((plan) => ({
+      id: plan.channel_dataplan_id,
+      sku: plan.channel_dataplan_name, // 或自訂成 `${plan.apn}-${plan.day}DAY` 類似格式
+      name: plan.channel_dataplan_name,
+      days: plan.day,
+      data: plan.data,
+      apn: plan.apn,
+      price: plan.price,
+      currency: plan.currency,
+    }));
+
+    res.status(200).json(simplified);
   } catch (err) {
     console.error("❌ Test List Error:", err.message);
     res.status(500).json({ error: "Test List Failed", detail: err.message });
