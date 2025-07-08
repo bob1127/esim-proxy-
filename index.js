@@ -107,19 +107,9 @@ app.get("/esim/test-list", async (req, res) => {
       { headers, timeout: 10000 }
     );
 
-    const plans = response.data && response.data.result ? response.data.result : [];
+    console.log("📦 API 回傳內容", JSON.stringify(response.data, null, 2));
 
-    // 只取部分欄位讓你易讀
-    const simplified = plans.map((plan) => ({
-      id: plan.dataplanID,
-      sku: `${plan.countryCode}-${plan.validityDays}DAY`,
-      name: plan.name,
-      country: plan.countryName,
-      days: plan.validityDays,
-      data: plan.dataLimit,
-    }));
-
-    res.status(200).json(simplified);
+    res.status(200).json({ success: true });
   } catch (err) {
     console.error("❌ Test List Error:", err.message);
     res.status(500).json({ error: "Test List Failed", detail: err.message });
