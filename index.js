@@ -89,3 +89,39 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);
 });
+// ✅ 額外測試：列出所有方案（格式化輸出）
+app.get("/esim/test-list", async (req, res) => {
+  const { timestamp, nonce, signature } = SIGN_HEADERS();
+
+  const headers = {
+    "Content-Type": "application/json",
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
+
+  try {
+    const response = await axios.get(
+      `${BASE_URL}/allesim/v1/esimDataplanList`,
+      { headers, timeout: 10000 }
+    );
+
+    const plans = response.data && response.data.result ? response.data.result : [];
+
+    // 只取部分欄位讓你易讀
+    const simplified = plans.map((plan) => ({
+      id: plan.dataplanID,
+      sku: `${plan.countryCode}-${plan.validityDays}DAY`,
+      name: plan.name,
+      country: plan.countryName,
+      days: plan.validityDays,
+      data: plan.dataLimit,
+    }));
+
+    res.status(200).json(simplified);
+  } catch (err) {
+    console.error("❌ Test List Error:", err.message);
+    res.status(500).json({ error: "Test List Failed", detail: err.message });
+  }
+});
