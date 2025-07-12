@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
+import FormData from "form-data";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -14,7 +15,7 @@ if (
   !process.env.ESIM_SALT ||
   !process.env.ESIM_BASE_URL
 ) {
-  throw new Error("❌ 環境變數未正確設定，請確認 ESIM_ACCOUNT、ESIM_SECRET、ESIM_SALT、ESIM_BASE_URL");
+  throw new Error("❌ 請設定環境變數 ESIM_ACCOUNT、ESIM_SECRET、ESIM_SALT、ESIM_BASE_URL");
 }
 
 const ACCOUNT = process.env.ESIM_ACCOUNT;
@@ -22,7 +23,13 @@ const SECRET = process.env.ESIM_SECRET;
 const SALT_HEX = process.env.ESIM_SALT;
 const BASE_URL = process.env.ESIM_BASE_URL;
 
-// ✅ 簽章產生函數
+// ✅ 方案對照表
+const PLAN_ID_MAP = {
+  "MY-1DAY-Daily500MB": "90ab730c-b369-4144-a6f5-be4376494791",
+  // 你可以持續擴充其他方案
+};
+
+// ✅ 產生簽章
 const SIGN_HEADERS = () => {
   const timestamp = Date.now().toString();
   const nonce = crypto.randomBytes(6).toString("hex");
@@ -43,7 +50,7 @@ const SIGN_HEADERS = () => {
   return { timestamp, nonce, signature };
 };
 
-// ✅ 查詢方案列表並轉為對照表格式
+// ✅ 查詢所有方案列表
 app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
@@ -65,11 +72,11 @@ app.get("/esim/list", async (req, res) => {
 
     const planMap = {};
     plans.forEach((plan) => {
-      const key = `${plan.country || "XX"}-${plan.days}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
-      planMap[key] = plan.id;
+      const key = `${plan.code || "XX"}-${plan.day}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
+      planMap[key] = plan.channel_dataplan_id;
     });
 
-    // ✅ 輸出複製用格式
+    // ✅ 輸出複製格式
     console.log("✅ PLAN_ID_MAP 對照表：\nconst PLAN_ID_MAP = {");
     for (const [key, value] of Object.entries(planMap)) {
       console.log(`  "${key}": "${value}",`);
@@ -91,7 +98,101 @@ app.get("/esim/list", async (req, res) => {
   }
 });
 
-// ✅ 啟動伺服器
+// ✅ 建立 eSIM 訂單並查詢 QRCode
+app.post("/esim/qrcode", async (req, res) => {
+  console.log("📥 來自前端的資料:", req.body);
+
+  const { planKey, channel_dataplan_id: rawId, planId, number } = req.body;
+  const count = parseInt(number) || 1;
+
+  const resolvedPlanId =
+    PLAN_ID_MAP[planKey] || rawId || planId;
+
+  if (!resolvedPlanId || !count) {
+    return res.status(400).json({ error: "缺少必要欄位 channel_dataplan_id 或 number" });
+  }
+
+  const { timestamp, nonce, signature } = SIGN_HEADERS();
+
+  const form = new FormData();
+  form.append("number", count);
+  form.append("channel_dataplan_id", resolvedPlanId);
+  form.append(
+    "activation_date",
+    new Date(Date.now() + 5 * 60 * 1000).toISOString().replace("T", " ").substring(0, 19)
+  );
+
+  const headers = {
+    ...form.getHeaders(),
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
+
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/allesim/v1/esimSubscribe`,
+      form,
+      { headers, timeout: 10000 }
+    );
+
+    const result = response.data;
+    console.log("📥 建立訂單結果:", result);
+
+    if (result.code === 1 && result.result?.topup_id) {
+      const topup_id = result.result.topup_id;
+
+      const { timestamp, nonce, signature } = SIGN_HEADERS();
+      const form2 = new FormData();
+      form2.append("topup_id", topup_id);
+
+      const detailRes = await axios.post(
+        `${BASE_URL}/allesim/v1/topupDetail`,
+        form2,
+        {
+          headers: {
+            ...form2.getHeaders(),
+            "MICROESIM-ACCOUNT": ACCOUNT,
+            "MICROESIM-NONCE": nonce,
+            "MICROESIM-TIMESTAMP": timestamp,
+            "MICROESIM-SIGN": signature,
+          },
+          timeout: 10000,
+        }
+      );
+
+      const detail = detailRes.data;
+      console.log("📥 查詢 QRCode 結果:", detail);
+
+      if (detail.code === 1 && detail.result?.qrcode) {
+        return res.status(200).json({
+          topup_id,
+          qrcode: detail.result.qrcode,
+        });
+      } else {
+        return res.status(200).json({
+          topup_id,
+          warning: "訂單成功但無 QRCode",
+          detail,
+        });
+      }
+    } else {
+      return res.status(400).json({ error: result.msg, raw: result });
+    }
+  } catch (err) {
+    console.error("❌ 建立訂單錯誤:", err.message);
+    if (err.response) {
+      return res.status(err.response.status).json({
+        error: "MicroeSIM 錯誤",
+        detail: err.response.data,
+      });
+    }
+    return res.status(500).json({ error: "伺服器錯誤", detail: err.message });
+  }
+});
+
+// ✅ 啟動 server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
