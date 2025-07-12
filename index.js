@@ -212,7 +212,7 @@ app.get("/esim/test-list", async (req, res) => {
   };
 
   try {
-    const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
+    const response = await axios.get(`${BASE_URL}/allesim/v1/channelProductList`, {
       headers,
       timeout: 10000,
     });
@@ -221,14 +221,24 @@ app.get("/esim/test-list", async (req, res) => {
 
     const planMap = {};
     plans.forEach((plan) => {
-      const key = `${plan.code || "XX"}-${plan.day}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
-      planMap[key] = plan.channel_dataplan_id;
+      const key = `${plan.name.replace(/\s+/g, "-")}-${plan.day}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
+      planMap[key] = {
+        id: plan.channel_dataplan_id,
+        name: plan.name,
+        price: plan.price,
+        currency: plan.currency || "USD",
+      };
     });
 
-    // ✅ 回傳 JavaScript 對照表格式
-    let output = `// ✅ 自動產生的 PLAN_ID_MAP\nconst PLAN_ID_MAP = {\n`;
+    // ✅ 輸出為 JS 格式
+    let output = `// ✅ 自動產生的完整 PLAN_ID_MAP（含價格、名稱）\nconst PLAN_ID_MAP = {\n`;
     for (const [key, value] of Object.entries(planMap)) {
-      output += `  "${key}": "${value}",\n`;
+      output += `  "${key}": {\n`;
+      output += `    id: "${value.id}",\n`;
+      output += `    name: "${value.name}",\n`;
+      output += `    price: ${value.price},\n`;
+      output += `    currency: "${value.currency}"\n`;
+      output += `  },\n`;
     }
     output += "};\n\nexport default PLAN_ID_MAP;\n";
 
@@ -238,6 +248,7 @@ app.get("/esim/test-list", async (req, res) => {
     res.status(500).send(`// ❌ 錯誤: ${err.message}`);
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
