@@ -199,7 +199,7 @@ app.post("/esim/qrcode", async (req, res) => {
     return res.status(500).json({ error: "伺服器錯誤", detail: err.message });
   }
 });
-app.get("/esim/test-list", async (req, res) => {
+app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
   const headers = {
@@ -211,40 +211,38 @@ app.get("/esim/test-list", async (req, res) => {
   };
 
   try {
-    const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
-      headers,
-      timeout: 10000,
-    });
+    const response = await axios.get(
+      `${BASE_URL}/allesim/v1/esimDataplanList`,
+      { headers, timeout: 10000 }
+    );
 
     const plans = response.data?.result || [];
 
     const planMap = {};
     plans.forEach((plan) => {
-      const key = `${plan.code || "XX"}-${plan.day}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
-      planMap[key] = {
-        id: plan.channel_dataplan_id,
-        name: plan.name,
-        price: plan.price,
-        currency: plan.currency || "USD",
-      };
+      const key = `${plan.country || "XX"}-${plan.days}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
+      planMap[key] = plan.id;
     });
 
-    // ✅ 輸出為 JS 格式
-    let output = `// ✅ 自動產生的完整 PLAN_ID_MAP（含價格、名稱）\nconst PLAN_ID_MAP = {\n`;
+    // ✅ 輸出複製用格式
+    console.log("✅ PLAN_ID_MAP 對照表：\nconst PLAN_ID_MAP = {");
     for (const [key, value] of Object.entries(planMap)) {
-      output += `  "${key}": {\n`;
-      output += `    id: "${value.id}",\n`;
-      output += `    name: "${value.name}",\n`;
-      output += `    price: ${value.price},\n`;
-      output += `    currency: "${value.currency}"\n`;
-      output += `  },\n`;
+      console.log(`  "${key}": "${value}",`);
     }
-    output += "};\n\nexport default PLAN_ID_MAP;\n";
+    console.log("};\n");
 
-    res.type("application/javascript").send(output);
+    res.status(200).json({
+      success: true,
+      planCount: plans.length,
+      planMap,
+      raw: plans,
+    });
   } catch (err) {
-    console.error("❌ /esim/test-list 查詢失敗:", err.message);
-    res.status(500).send(`// ❌ 錯誤: ${err.message}`);
+    console.error("❌ 抓取方案失敗:", err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
   }
 });
 
