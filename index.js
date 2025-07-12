@@ -2,13 +2,17 @@ import express from "express";
 import axios from "axios";
 import crypto from "crypto";
 import FormData from "form-data";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-const ACCOUNT = "test_account_9999";
-const SECRET = "7119968f9ff07654ga485487822g";
-const SALT_HEX = "c38ab89bd01537b3915848d689090e56";
+const ACCOUNT = process.env.ESIM_ACCOUNT;
+const SECRET = process.env.ESIM_SECRET;
+const SALT_HEX = process.env.ESIM_SALT;
+const BASE_URL = process.env.ESIM_BASE_URL;
 
 const PLAN_ID_MAP = {
   "KR-3DAY": "2691d925-2faa-4fd4-863c-601d37252549",
@@ -36,13 +40,12 @@ const SIGN_HEADERS = () => {
   return { timestamp, nonce, signature };
 };
 
-// ✅ 建立訂單並查詢 QRCode
+// ✅ 建立訂單 + 查詢 QRCode
 app.post("/esim/qrcode", async (req, res) => {
   console.log("🪵 Incoming body:", req.body);
 
   const rawPlanId = req.body.channel_dataplan_id || req.body.planId;
   const number = req.body.number || req.body.quantity;
-
   const channel_dataplan_id = PLAN_ID_MAP[rawPlanId] || rawPlanId;
 
   if (!channel_dataplan_id || !number) {
@@ -68,41 +71,31 @@ app.post("/esim/qrcode", async (req, res) => {
   };
 
   try {
-    const response = await axios.post(
-      "https://microesim.club/allesim/v1/esimSubscribe",
-      form,
-      { headers, timeout: 10000 }
-    );
+    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, form, {
+      headers,
+      timeout: 10000,
+    });
 
     const result = response.data;
-    console.log("📥 Subscribe result:", result);
-
     if (result.code === 1 && result.result?.topup_id) {
       const topup_id = result.result.topup_id;
-
       const { timestamp, nonce, signature } = SIGN_HEADERS();
 
       const form2 = new FormData();
       form2.append("topup_id", topup_id);
 
-      const detailRes = await axios.post(
-        "https://microesim.club/allesim/v1/topupDetail",
-        form2,
-        {
-          headers: {
-            ...form2.getHeaders(),
-            "MICROESIM-ACCOUNT": ACCOUNT,
-            "MICROESIM-NONCE": nonce,
-            "MICROESIM-TIMESTAMP": timestamp,
-            "MICROESIM-SIGN": signature,
-          },
-          timeout: 10000,
-        }
-      );
+      const detailRes = await axios.post(`${BASE_URL}/allesim/v1/topupDetail`, form2, {
+        headers: {
+          ...form2.getHeaders(),
+          "MICROESIM-ACCOUNT": ACCOUNT,
+          "MICROESIM-NONCE": nonce,
+          "MICROESIM-TIMESTAMP": timestamp,
+          "MICROESIM-SIGN": signature,
+        },
+        timeout: 10000,
+      });
 
       const detail = detailRes.data;
-      console.log("📥 Detail result:", detail);
-
       if (detail.code === 1 && detail.result?.qrcode) {
         return res.status(200).json({
           topup_id,
@@ -121,7 +114,6 @@ app.post("/esim/qrcode", async (req, res) => {
   } catch (err) {
     console.error("❌ Error:", err.message);
     if (err.response) {
-      console.error("❌ MicroeSIM Response:", err.response.data);
       return res.status(err.response.status).json({
         error: "MicroeSIM Error",
         detail: err.response.data,
@@ -131,10 +123,9 @@ app.post("/esim/qrcode", async (req, res) => {
   }
 });
 
-// ✅ 查詢可用方案
+// ✅ 提供 JSON 顯示可用方案
 app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
-
   const headers = {
     "Content-Type": "application/json",
     "MICROESIM-ACCOUNT": ACCOUNT,
@@ -144,10 +135,10 @@ app.get("/esim/list", async (req, res) => {
   };
 
   try {
-    const response = await axios.get(
-      "https://microesim.club/allesim/v1/esimDataplanList",
-      { headers, timeout: 10000 }
-    );
+    const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
+      headers,
+      timeout: 10000,
+    });
     res.status(200).json(response.data);
   } catch (err) {
     console.error("❌ List Error:", err.message);
@@ -155,7 +146,79 @@ app.get("/esim/list", async (req, res) => {
   }
 });
 
+// ✅ 提供 HTML 顯示方案資訊（可瀏覽器開啟）
+app.get("/esim/plans", async (req, res) => {
+  const { timestamp, nonce, signature } = SIGN_HEADERS();
+  const headers = {
+    "Content-Type": "application/json",
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
+
+  try {
+    const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
+      headers,
+      timeout: 10000,
+    });
+
+    const plans = response.data?.result || [];
+
+    const html = `
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>eSIM Plans</title>
+        <style>
+          body { font-family: sans-serif; padding: 20px; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #ccc; padding: 8px; }
+          th { background: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h1>📦 eSIM 方案列表（正式帳號）</h1>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Day</th>
+              <th>Data</th>
+              <th>Price</th>
+              <th>Currency</th>
+              <th>Plan ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${plans
+              .map(
+                (plan) => `
+                <tr>
+                  <td>${plan.name}</td>
+                  <td>${plan.day}</td>
+                  <td>${plan.data}</td>
+                  <td>${plan.price}</td>
+                  <td>${plan.currency}</td>
+                  <td>${plan.channel_dataplan_id}</td>
+                </tr>
+              `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.type("html").send(html);
+  } catch (err) {
+    console.error("❌ HTML plans error:", err.message);
+    res.status(500).send(`<h1>❌ Failed to load plans: ${err.message}</h1>`);
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`🚀 Server listening on http://localhost:${PORT}`);
 });
