@@ -200,6 +200,47 @@ app.post("/esim/qrcode", async (req, res) => {
     return res.status(500).json({ error: "伺服器錯誤", detail: err.message });
   }
 });
+app.get("/esim/test-list", async (req, res) => {
+  const { timestamp, nonce, signature } = SIGN_HEADERS();
+
+  const headers = {
+    "Content-Type": "application/json",
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
+
+  try {
+    const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
+      headers,
+      timeout: 10000,
+    });
+
+    const plans = response.data?.result || [];
+
+    const formatted = plans.map((plan) => ({
+      id: plan.channel_dataplan_id,
+      key: `${plan.code || "XX"}-${plan.day}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`,
+      day: plan.day,
+      data: plan.data,
+      country: plan.country_name || plan.area,
+      active_type: plan.active_type,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formatted.length,
+      plans: formatted,
+    });
+  } catch (err) {
+    console.error("❌ test-list 抓取失敗:", err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
