@@ -21,7 +21,6 @@ const PLAN_ID_MAP = {
   "KR-30DAY": "adca09ab-55ae-49c6-9f97-a09ee868c067",
 };
 
-
 const SIGN_HEADERS = () => {
   const timestamp = Date.now().toString();
   const nonce = crypto.randomBytes(6).toString("hex");
@@ -57,10 +56,10 @@ app.post("/esim/qrcode", async (req, res) => {
   const form = new FormData();
   form.append("number", number);
   form.append("channel_dataplan_id", channel_dataplan_id);
-  form.append(
-    "activation_date",
-    new Date(Date.now() + 5 * 60 * 1000).toISOString().replace("T", " ").substring(0, 19)
-  );
+
+  const now = new Date(Date.now() + 5 * 60 * 1000);
+  const activationDate = now.toISOString().replace("T", " ").substring(0, 16); // ✅ 無秒數格式
+  form.append("activation_date", activationDate);
 
   const headers = {
     ...form.getHeaders(),
@@ -146,7 +145,7 @@ app.get("/esim/list", async (req, res) => {
   }
 });
 
-// ✅ 提供 HTML 顯示方案資訊（可瀏覽器開啟）
+// ✅ 提供純 JSON 顯示方案（/esim/plans）
 app.get("/esim/plans", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
   const headers = {
@@ -164,14 +163,12 @@ app.get("/esim/plans", async (req, res) => {
     });
 
     const plans = response.data?.result || [];
-
-    res.status(200).json(plans); // ✅ 改成回傳純 JSON 資料
+    res.status(200).json(plans); // ✅ 純 JSON 回傳
   } catch (err) {
-    console.error("❌ HTML plans error:", err.message);
+    console.error("❌ Plans Error:", err.message);
     res.status(500).json({ error: "Failed to load plans", detail: err.message });
   }
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
