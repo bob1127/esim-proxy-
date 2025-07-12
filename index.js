@@ -163,58 +163,13 @@ app.get("/esim/plans", async (req, res) => {
 
     const plans = response.data?.result || [];
 
-    const html = `
-      <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>eSIM Plans</title>
-        <style>
-          body { font-family: sans-serif; padding: 20px; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #ccc; padding: 8px; }
-          th { background: #f2f2f2; }
-        </style>
-      </head>
-      <body>
-        <h1>📦 eSIM 方案列表（正式帳號）</h1>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Day</th>
-              <th>Data</th>
-              <th>Price</th>
-              <th>Currency</th>
-              <th>Plan ID</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${plans
-              .map(
-                (plan) => `
-                <tr>
-                  <td>${plan.name}</td>
-                  <td>${plan.day}</td>
-                  <td>${plan.data}</td>
-                  <td>${plan.price}</td>
-                  <td>${plan.currency}</td>
-                  <td>${plan.channel_dataplan_id}</td>
-                </tr>
-              `
-              )
-              .join("")}
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
-
-    res.type("html").send(html);
+    res.status(200).json(plans); // ✅ 改成回傳純 JSON 資料
   } catch (err) {
     console.error("❌ HTML plans error:", err.message);
-    res.status(500).send(`<h1>❌ Failed to load plans: ${err.message}</h1>`);
+    res.status(500).json({ error: "Failed to load plans", detail: err.message });
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
