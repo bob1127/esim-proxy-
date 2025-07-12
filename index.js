@@ -199,7 +199,6 @@ app.post("/esim/qrcode", async (req, res) => {
     return res.status(500).json({ error: "伺服器錯誤", detail: err.message });
   }
 });
-// ✅ 顯示 JS 格式對照表（for 開發複製用）
 app.get("/esim/test-list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
@@ -212,7 +211,7 @@ app.get("/esim/test-list", async (req, res) => {
   };
 
   try {
-    const response = await axios.get(`${BASE_URL}/allesim/v1/channelProductList`, {
+    const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
       headers,
       timeout: 10000,
     });
@@ -221,7 +220,7 @@ app.get("/esim/test-list", async (req, res) => {
 
     const planMap = {};
     plans.forEach((plan) => {
-      const key = `${plan.name.replace(/\s+/g, "-")}-${plan.day}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
+      const key = `${plan.code || "XX"}-${plan.day}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
       planMap[key] = {
         id: plan.channel_dataplan_id,
         name: plan.name,
