@@ -2,17 +2,15 @@ import express from "express";
 import axios from "axios";
 import crypto from "crypto";
 import FormData from "form-data";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-const ACCOUNT = process.env.ESIM_ACCOUNT;
-const SECRET = process.env.ESIM_SECRET;
-const SALT_HEX = process.env.ESIM_SALT;
-const BASE_URL = process.env.ESIM_BASE_URL;
+// ✅ 正式帳號參數（已寫死）
+const ACCOUNT = "huangguanlun1";
+const SECRET = "470a04580ec9ddg8181gcg2577c5";
+const SALT_HEX = "f0aff0d073486c15a9d2c7c5b20d2961";
+const BASE_URL = "https://microesim.top";
 
 const PLAN_ID_MAP = {
   "KR-3DAY": "2691d925-2faa-4fd4-863c-601d37252549",
@@ -137,7 +135,7 @@ app.get("/esim/list", async (req, res) => {
   try {
     const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
       headers,
-      timeout: 10000,
+      timeout: 15000,
     });
     res.status(200).json(response.data);
   } catch (err) {
@@ -160,7 +158,7 @@ app.get("/esim/plans", async (req, res) => {
   try {
     const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
       headers,
-      timeout: 10000,
+      timeout: 15000,
     });
 
     const plans = response.data?.result || [];
