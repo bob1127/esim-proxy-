@@ -17,7 +17,13 @@ if (
 ) {
   throw new Error("❌ 請設定環境變數 ESIM_ACCOUNT、ESIM_SECRET、ESIM_SALT、ESIM_BASE_URL");
 }
-// ✅ 補上這段函式
+
+const ACCOUNT = process.env.ESIM_ACCOUNT;
+const SECRET = process.env.ESIM_SECRET;
+const SALT_HEX = process.env.ESIM_SALT;
+const BASE_URL = process.env.ESIM_BASE_URL;
+
+// ✅ 時間格式函式：YYYY-MM-DD HH:mm:ss
 function formatActivationDate(date = new Date()) {
   const pad = (n) => (n < 10 ? "0" + n : n);
   return (
@@ -34,18 +40,13 @@ function formatActivationDate(date = new Date()) {
     pad(date.getSeconds())
   );
 }
-const ACCOUNT = process.env.ESIM_ACCOUNT;
-const SECRET = process.env.ESIM_SECRET;
-const SALT_HEX = process.env.ESIM_SALT;
-const BASE_URL = process.env.ESIM_BASE_URL;
 
-// ✅ 方案對照表
+// ✅ 方案對照表（可擴充）
 const PLAN_ID_MAP = {
   "MY-1DAY-Daily500MB": "90ab730c-b369-4144-a6f5-be4376494791",
-  // 你可以持續擴充其他方案
 };
 
-// ✅ 產生簽章
+// ✅ 建立簽章
 const SIGN_HEADERS = () => {
   const timestamp = Date.now().toString();
   const nonce = crypto.randomBytes(6).toString("hex");
@@ -66,7 +67,7 @@ const SIGN_HEADERS = () => {
   return { timestamp, nonce, signature };
 };
 
-// ✅ 查詢所有方案列表
+// ✅ 查詢方案列表
 app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
@@ -79,10 +80,10 @@ app.get("/esim/list", async (req, res) => {
   };
 
   try {
-    const response = await axios.get(
-      `${BASE_URL}/allesim/v1/esimDataplanList`,
-      { headers, timeout: 10000 }
-    );
+    const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
+      headers,
+      timeout: 10000,
+    });
 
     const plans = response.data?.result || [];
 
@@ -92,7 +93,6 @@ app.get("/esim/list", async (req, res) => {
       planMap[key] = plan.channel_dataplan_id;
     });
 
-    // ✅ 輸出複製格式
     console.log("✅ PLAN_ID_MAP 對照表：\nconst PLAN_ID_MAP = {");
     for (const [key, value] of Object.entries(planMap)) {
       console.log(`  "${key}": "${value}",`);
@@ -114,15 +114,14 @@ app.get("/esim/list", async (req, res) => {
   }
 });
 
-// ✅ 建立 eSIM 訂單並查詢 QRCode
+// ✅ 建立訂單並查詢 QRCode
 app.post("/esim/qrcode", async (req, res) => {
   console.log("📥 來自前端的資料:", req.body);
 
   const { planKey, channel_dataplan_id: rawId, planId, number } = req.body;
   const count = parseInt(number) || 1;
 
-  const resolvedPlanId =
-    PLAN_ID_MAP[planKey] || rawId || planId;
+  const resolvedPlanId = PLAN_ID_MAP[planKey] || rawId || planId;
 
   if (!resolvedPlanId || !count) {
     return res.status(400).json({ error: "缺少必要欄位 channel_dataplan_id 或 number" });
@@ -133,9 +132,10 @@ app.post("/esim/qrcode", async (req, res) => {
   const form = new FormData();
   form.append("number", count);
   form.append("channel_dataplan_id", resolvedPlanId);
-const activationDate = formatActivationDate(new Date(Date.now() + 5 * 60 * 1000));
-form.append("activation_date", activationDate);
 
+  const activationDate = formatActivationDate(new Date(Date.now() + 5 * 60 * 1000));
+  form.append("activation_date", activationDate);
+  console.log("📅 activation_date:", activationDate);
 
   const headers = {
     ...form.getHeaders(),
@@ -146,11 +146,10 @@ form.append("activation_date", activationDate);
   };
 
   try {
-    const response = await axios.post(
-      `${BASE_URL}/allesim/v1/esimSubscribe`,
-      form,
-      { headers, timeout: 10000 }
-    );
+    const response = await axios.post(`${BASE_URL}/allesim/v1/esimSubscribe`, form, {
+      headers,
+      timeout: 10000,
+    });
 
     const result = response.data;
     console.log("📥 建立訂單結果:", result);
@@ -162,20 +161,16 @@ form.append("activation_date", activationDate);
       const form2 = new FormData();
       form2.append("topup_id", topup_id);
 
-      const detailRes = await axios.post(
-        `${BASE_URL}/allesim/v1/topupDetail`,
-        form2,
-        {
-          headers: {
-            ...form2.getHeaders(),
-            "MICROESIM-ACCOUNT": ACCOUNT,
-            "MICROESIM-NONCE": nonce,
-            "MICROESIM-TIMESTAMP": timestamp,
-            "MICROESIM-SIGN": signature,
-          },
-          timeout: 10000,
-        }
-      );
+      const detailRes = await axios.post(`${BASE_URL}/allesim/v1/topupDetail`, form2, {
+        headers: {
+          ...form2.getHeaders(),
+          "MICROESIM-ACCOUNT": ACCOUNT,
+          "MICROESIM-NONCE": nonce,
+          "MICROESIM-TIMESTAMP": timestamp,
+          "MICROESIM-SIGN": signature,
+        },
+        timeout: 10000,
+      });
 
       const detail = detailRes.data;
       console.log("📥 查詢 QRCode 結果:", detail);
@@ -206,7 +201,8 @@ form.append("activation_date", activationDate);
     return res.status(500).json({ error: "伺服器錯誤", detail: err.message });
   }
 });
-// ✅ 顯示 JS 格式對照表（for 開發複製用）
+
+// ✅ 顯示 JS 格式對照表（for 複製貼上）
 app.get("/esim/test-list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
@@ -232,7 +228,6 @@ app.get("/esim/test-list", async (req, res) => {
       planMap[key] = plan.channel_dataplan_id;
     });
 
-    // ✅ 回傳 JavaScript 對照表格式
     let output = `// ✅ 自動產生的 PLAN_ID_MAP\nconst PLAN_ID_MAP = {\n`;
     for (const [key, value] of Object.entries(planMap)) {
       output += `  "${key}": "${value}",\n`;
