@@ -117,10 +117,9 @@ app.post("/esim/qrcode", async (req, res) => {
   const form = new FormData();
   form.append("number", count);
   form.append("channel_dataplan_id", resolvedPlanId);
-  form.append(
-    "activation_date",
-    new Date(Date.now() + 5 * 60 * 1000).toISOString().replace("T", " ").substring(0, 19)
-  );
+const activationDate = formatActivationDate(new Date(Date.now() + 5 * 60 * 1000));
+form.append("activation_date", activationDate);
+
 
   const headers = {
     ...form.getHeaders(),
