@@ -7,11 +7,22 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const ACCOUNT = process.env.ESIM_ACCOUNT!;
-const SECRET = process.env.ESIM_SECRET!;
-const SALT_HEX = process.env.ESIM_SALT!;
-const BASE_URL = process.env.ESIM_BASE_URL!;
+// ✅ 驗證環境變數存在
+if (
+  !process.env.ESIM_ACCOUNT ||
+  !process.env.ESIM_SECRET ||
+  !process.env.ESIM_SALT ||
+  !process.env.ESIM_BASE_URL
+) {
+  throw new Error("❌ 環境變數未正確設定，請確認 ESIM_ACCOUNT、ESIM_SECRET、ESIM_SALT、ESIM_BASE_URL");
+}
 
+const ACCOUNT = process.env.ESIM_ACCOUNT;
+const SECRET = process.env.ESIM_SECRET;
+const SALT_HEX = process.env.ESIM_SALT;
+const BASE_URL = process.env.ESIM_BASE_URL;
+
+// ✅ 簽章產生函數
 const SIGN_HEADERS = () => {
   const timestamp = Date.now().toString();
   const nonce = crypto.randomBytes(6).toString("hex");
@@ -32,6 +43,7 @@ const SIGN_HEADERS = () => {
   return { timestamp, nonce, signature };
 };
 
+// ✅ 查詢方案列表並轉為對照表格式
 app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
@@ -51,19 +63,18 @@ app.get("/esim/list", async (req, res) => {
 
     const plans = response.data?.result || [];
 
-    const planMap: Record<string, string> = {};
-    plans.forEach((plan: any) => {
-      const cleanKey = `${plan.country || "XX"}-${plan.days}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
-      planMap[cleanKey] = plan.id;
+    const planMap = {};
+    plans.forEach((plan) => {
+      const key = `${plan.country || "XX"}-${plan.days}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
+      planMap[key] = plan.id;
     });
 
-    // ✅ 輸出對照表於後台 log（複製用）
-    console.log("✅ 方案對照表：");
-    console.log("const PLAN_ID_MAP = {");
+    // ✅ 輸出複製用格式
+    console.log("✅ PLAN_ID_MAP 對照表：\nconst PLAN_ID_MAP = {");
     for (const [key, value] of Object.entries(planMap)) {
       console.log(`  "${key}": "${value}",`);
     }
-    console.log("};");
+    console.log("};\n");
 
     res.status(200).json({
       success: true,
@@ -71,8 +82,8 @@ app.get("/esim/list", async (req, res) => {
       planMap,
       raw: plans,
     });
-  } catch (err: any) {
-    console.error("❌ Failed to fetch plan list:", err.message);
+  } catch (err) {
+    console.error("❌ 抓取方案失敗:", err.message);
     res.status(500).json({
       success: false,
       error: err.message,
@@ -80,7 +91,8 @@ app.get("/esim/list", async (req, res) => {
   }
 });
 
+// ✅ 啟動伺服器
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
