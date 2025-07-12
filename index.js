@@ -1,4 +1,3 @@
-// ✅ 建立 eSIM 訂單並查詢 QRCode
 app.post("/esim/qrcode", async (req, res) => {
   console.log("📥 來自前端的資料:", req.body);
 
@@ -16,7 +15,7 @@ app.post("/esim/qrcode", async (req, res) => {
 
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
-  const form = new FormData();
+  const form = new (require("form-data"))();
   form.append("number", count);
   form.append("channel_dataplan_id", resolvedPlanId);
   form.append(
@@ -45,8 +44,8 @@ app.post("/esim/qrcode", async (req, res) => {
     if (result.code === 1 && result.result?.topup_id) {
       const topup_id = result.result.topup_id;
 
-      const { timestamp, nonce, signature } = SIGN_HEADERS();
-      const form2 = new FormData();
+      const { timestamp: t2, nonce: n2, signature: s2 } = SIGN_HEADERS();
+      const form2 = new (require("form-data"))();
       form2.append("topup_id", topup_id);
 
       const detailRes = await axios.post(
@@ -56,9 +55,9 @@ app.post("/esim/qrcode", async (req, res) => {
           headers: {
             ...form2.getHeaders(),
             "MICROESIM-ACCOUNT": ACCOUNT,
-            "MICROESIM-NONCE": nonce,
-            "MICROESIM-TIMESTAMP": timestamp,
-            "MICROESIM-SIGN": signature,
+            "MICROESIM-NONCE": n2,
+            "MICROESIM-TIMESTAMP": t2,
+            "MICROESIM-SIGN": s2,
           },
           timeout: 10000,
         }
