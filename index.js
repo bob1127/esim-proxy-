@@ -51,15 +51,43 @@ app.post("/esim/qrcode", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
+  // 🔍 先查詢方案清單，判斷 active_type
+  let active_type = null;
+  try {
+    const { timestamp, nonce, signature } = SIGN_HEADERS();
+    const listRes = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
+      headers: {
+        "Content-Type": "application/json",
+        "MICROESIM-ACCOUNT": ACCOUNT,
+        "MICROESIM-NONCE": nonce,
+        "MICROESIM-TIMESTAMP": timestamp,
+        "MICROESIM-SIGN": signature,
+      },
+      timeout: 15000,
+    });
+
+    const found = listRes.data.result.find(
+      (item) => item.channel_dataplan_id === channel_dataplan_id
+    );
+    active_type = found?.active_type || "ACTIVEDBYDEVICE";
+  } catch (e) {
+    console.warn("⚠️ 無法取得方案清單，預設為 ACTIVEDBYDEVICE");
+    active_type = "ACTIVEDBYDEVICE";
+  }
+
   const { timestamp, nonce, signature } = SIGN_HEADERS();
 
   const form = new FormData();
   form.append("number", number);
   form.append("channel_dataplan_id", channel_dataplan_id);
 
-  const now = new Date(Date.now() + 5 * 60 * 1000);
-  const activationDate = now.toISOString().replace("T", " ").substring(0, 16); // ✅ 無秒數格式
-  form.append("activation_date", activationDate);
+  // ✅ 僅當為 ACTIVEDBYORDER 才加上 activation_date
+  if (active_type === "ACTIVEDBYORDER") {
+    const now = new Date(Date.now() + 5 * 60 * 1000);
+    const activationDate = now.toISOString().replace("T", " ").substring(0, 16);
+    form.append("activation_date", activationDate);
+    console.log("📅 activation_date:", activationDate);
+  }
 
   const headers = {
     ...form.getHeaders(),
@@ -121,6 +149,7 @@ app.post("/esim/qrcode", async (req, res) => {
     return res.status(500).json({ error: "Internal Error", detail: err.message });
   }
 });
+
 
 // ✅ 提供 JSON 顯示可用方案
 app.get("/esim/list", async (req, res) => {
