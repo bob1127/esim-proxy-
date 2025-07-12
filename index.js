@@ -17,7 +17,23 @@ if (
 ) {
   throw new Error("❌ 請設定環境變數 ESIM_ACCOUNT、ESIM_SECRET、ESIM_SALT、ESIM_BASE_URL");
 }
-
+// ✅ 補上這段函式
+function formatActivationDate(date = new Date()) {
+  const pad = (n) => (n < 10 ? "0" + n : n);
+  return (
+    date.getFullYear() +
+    "-" +
+    pad(date.getMonth() + 1) +
+    "-" +
+    pad(date.getDate()) +
+    " " +
+    pad(date.getHours()) +
+    ":" +
+    pad(date.getMinutes()) +
+    ":" +
+    pad(date.getSeconds())
+  );
+}
 const ACCOUNT = process.env.ESIM_ACCOUNT;
 const SECRET = process.env.ESIM_SECRET;
 const SALT_HEX = process.env.ESIM_SALT;
