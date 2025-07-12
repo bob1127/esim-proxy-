@@ -13,12 +13,14 @@ const SALT_HEX = "f0aff0d073486c15a9d2c7c5b20d2961";
 const BASE_URL = "https://microesim.top";
 
 const PLAN_ID_MAP = {
+  "Malaysia-Daily500MB-1-A0": "90ab730c-b369-4144-a6f5-be4376494791",
   "KR-3DAY": "2691d925-2faa-4fd4-863c-601d37252549",
   "KR-5DAY": "3f30e801-37b8-4ae4-a7d6-bb99ffbd1af7",
   "KR-10DAY": "005740c7-5388-40f6-b2a3-8c2e36e4aecd",
   "KR-20DAY": "9755f575-6a95-4337-9352-a2d664bf1bbd",
   "KR-30DAY": "adca09ab-55ae-49c6-9f97-a09ee868c067",
 };
+
 
 const SIGN_HEADERS = () => {
   const timestamp = Date.now().toString();
