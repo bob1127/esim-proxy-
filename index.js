@@ -191,6 +191,45 @@ app.post("/esim/qrcode", async (req, res) => {
     return res.status(500).json({ error: "伺服器錯誤", detail: err.message });
   }
 });
+// ✅ 顯示 JS 格式對照表（for 開發複製用）
+app.get("/esim/test-list", async (req, res) => {
+  const { timestamp, nonce, signature } = SIGN_HEADERS();
+
+  const headers = {
+    "Content-Type": "application/json",
+    "MICROESIM-ACCOUNT": ACCOUNT,
+    "MICROESIM-NONCE": nonce,
+    "MICROESIM-TIMESTAMP": timestamp,
+    "MICROESIM-SIGN": signature,
+  };
+
+  try {
+    const response = await axios.get(`${BASE_URL}/allesim/v1/esimDataplanList`, {
+      headers,
+      timeout: 10000,
+    });
+
+    const plans = response.data?.result || [];
+
+    const planMap = {};
+    plans.forEach((plan) => {
+      const key = `${plan.code || "XX"}-${plan.day}DAY-${(plan.data || "NA").replace(/\s+/g, "")}`;
+      planMap[key] = plan.channel_dataplan_id;
+    });
+
+    // ✅ 回傳 JavaScript 對照表格式
+    let output = `// ✅ 自動產生的 PLAN_ID_MAP\nconst PLAN_ID_MAP = {\n`;
+    for (const [key, value] of Object.entries(planMap)) {
+      output += `  "${key}": "${value}",\n`;
+    }
+    output += "};\n\nexport default PLAN_ID_MAP;\n";
+
+    res.type("application/javascript").send(output);
+  } catch (err) {
+    console.error("❌ /esim/test-list 查詢失敗:", err.message);
+    res.status(500).send(`// ❌ 錯誤: ${err.message}`);
+  }
+});
 
 // ✅ 啟動 server
 const PORT = process.env.PORT || 3000;
