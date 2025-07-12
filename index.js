@@ -28,9 +28,9 @@ function formatActivationDate(date = new Date()) {
   const pad = (n) => (n < 10 ? "0" + n : n);
   return (
     date.getFullYear() +
-    "-" +
+    "/" +
     pad(date.getMonth() + 1) +
-    "-" +
+    "/" +
     pad(date.getDate()) +
     " " +
     pad(date.getHours()) +
@@ -40,6 +40,7 @@ function formatActivationDate(date = new Date()) {
     pad(date.getSeconds())
   );
 }
+
 
 const PLAN_ID_MAP = {
   "MY-1DAY-Daily500MB": "90ab730c-b369-4144-a6f5-be4376494791",
