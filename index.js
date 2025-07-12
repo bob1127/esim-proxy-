@@ -48,7 +48,10 @@ const PLAN_ID_MAP = {
 // ✅ 每次產生唯一簽章 headers
 const SIGN_HEADERS = () => {
   const timestamp = Date.now().toString();
-  const nonce = `${Date.now()}-${randomUUID()}`; // 更保險的唯一值
+
+  // ✅ 符合長度限制：8~20 字元
+  const nonce = crypto.randomBytes(9).toString("hex").slice(0, 16); // 16 字元
+
   const hexKey = crypto.pbkdf2Sync(
     SECRET,
     Buffer.from(SALT_HEX, "hex"),
@@ -65,6 +68,7 @@ const SIGN_HEADERS = () => {
 
   return { timestamp, nonce, signature };
 };
+
 
 app.get("/esim/list", async (req, res) => {
   const { timestamp, nonce, signature } = SIGN_HEADERS();
